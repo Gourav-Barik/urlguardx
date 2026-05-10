@@ -141,6 +141,7 @@ public class AgenticControllerService {
                 );
 
         ScanResponse response = new ScanResponse();
+        response.setCanonicalUrl(url);      // ← the fully canonicalized URL
         response.setRiskScore(score);
         response.setStatus(status);
         response.setExplanation(explanation);
@@ -186,8 +187,10 @@ public class AgenticControllerService {
                 port = -1;
             }
 
-            // Strip trailing slash from path (treat /neverssl.com == /neverssl.com/)
-            if (path.endsWith("/") && path.length() > 1) {
+            // Strip ALL trailing slashes from the path
+            // e.g. http://neverssl.com/  → path="/"  → becomes ""
+            //      http://example.com/a/ → path="/a/" → becomes "/a"
+            while (path.endsWith("/")) {
                 path = path.substring(0, path.length() - 1);
             }
 
@@ -200,7 +203,7 @@ public class AgenticControllerService {
             return sb.toString();
         } catch (Exception e) {
             log.warn("[AGENT] URL normalization failed for '{}': {}", raw, e.getMessage());
-            return raw; // fall back to original
+            return raw;
         }
     }
 

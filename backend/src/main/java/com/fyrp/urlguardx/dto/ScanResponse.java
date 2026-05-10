@@ -21,6 +21,7 @@ public class ScanResponse {
     private int           riskScore;    // 0-100
     private String        status;       // SAFE | SUSPICIOUS | HIGH RISK
     private String        explanation;  // Gemini AI synthesis
+    private String        canonicalUrl; // fully normalized URL actually scanned
 
     private ModulesWrapper modules;
 
@@ -61,6 +62,8 @@ public class ScanResponse {
     public void           setStatus(String status) { this.status = status; }
     public String         getExplanation() { return explanation; }
     public void           setExplanation(String explanation) { this.explanation = explanation; }
+    public String         getCanonicalUrl()  { return canonicalUrl; }
+    public void           setCanonicalUrl(String canonicalUrl) { this.canonicalUrl = canonicalUrl; }
     public ModulesWrapper getModules()     { return modules;     }
     public void           setModules(ModulesWrapper modules) { this.modules = modules; }
 }
