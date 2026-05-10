@@ -51,8 +51,9 @@ public class SslValidatorService {
             SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
             SSLSocket socket;
             try {
-                socket = (SSLSocket) factory.createSocket();
-                socket.connect(new java.net.InetSocketAddress(host, port), TIMEOUT_MS);
+                java.net.Socket underlying = new java.net.Socket();
+                underlying.connect(new java.net.InetSocketAddress(host, port), TIMEOUT_MS);
+                socket = (SSLSocket) factory.createSocket(underlying, host, port, true);
                 socket.setSoTimeout(TIMEOUT_MS);
                 socket.startHandshake();
             } catch (javax.net.ssl.SSLHandshakeException sslEx) {

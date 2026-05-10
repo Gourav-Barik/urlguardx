@@ -4,7 +4,7 @@ import {
   FileText, Database, Bot, AlertTriangle, CheckCircle2, 
   XCircle, Activity, Terminal, Cpu, Network,
   Server, Zap, Code, MinusCircle, Crosshair, Radar, Fingerprint,
-  Clock, X
+  Clock, X, Trash2, RefreshCw
 } from 'lucide-react';
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://urlguardx-backend.onrender.com').replace(/\/$/, '');
 export default function App() {
@@ -282,6 +282,14 @@ const handleRetry = async () => {
     });
   };
 
+  const deleteHistoryItem = (urlToDelete) => {
+    setHistory(prev => {
+      const updated = prev.filter(item => item.url !== urlToDelete);
+      localStorage.setItem('urlguardx_history', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   return (
     <>
       <style>{`
@@ -324,13 +332,19 @@ const handleRetry = async () => {
               </div>
               
               <div className="flex items-center gap-4">
-                <button 
-                  onClick={() => setShowHistory(true)}
-                  className="flex items-center gap-2 px-4 py-2 border border-white/10 bg-black/40 rounded-md shadow-inner text-slate-400 hover:text-cyan-400 hover:border-cyan-500/30 transition-all font-mono text-xs"
-                >
-                  <Clock className="w-4 h-4" />
-                  <span className="hidden sm:inline">HISTORY</span>
-                </button>
+                <div className="relative group">
+                  <button 
+                    onClick={() => setShowHistory(true)}
+                    className="flex items-center justify-center p-2.5 border border-white/10 bg-black/40 rounded-md shadow-inner text-slate-400 hover:text-cyan-400 hover:border-cyan-500/30 transition-all"
+                  >
+                    <Clock className="w-5 h-5" />
+                  </button>
+                  <div className="absolute top-full right-0 mt-2 w-max opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
+                    <div className="bg-black/90 border border-cyan-500/30 text-cyan-400 text-[10px] font-mono px-2 py-1 rounded shadow-lg">
+                      HISTORY
+                    </div>
+                  </div>
+                </div>
                 <div className="hidden md:flex items-center gap-3 font-mono text-xs border border-white/10 bg-black/40 px-4 py-2 rounded-md shadow-inner">
                   <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
                   <span className="text-slate-400">SYSTEM:</span>
@@ -605,58 +619,105 @@ const handleRetry = async () => {
           )}
         </main>
 
-        {/* HISTORY MODAL */}
-        {showHistory && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowHistory(false)}></div>
-            <div className="relative w-full max-w-2xl glass-panel border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] animate-in fade-in zoom-in-95 duration-300">
-              <div className="flex items-center justify-between p-4 border-b border-white/10 bg-black/40">
-                <div className="flex items-center gap-3">
-                  <Clock className="w-5 h-5 text-cyan-400" />
-                  <h3 className="text-lg font-bold text-white tracking-wide">Scan History</h3>
-                </div>
-                <button onClick={() => setShowHistory(false)} className="text-slate-500 hover:text-rose-400 transition-colors p-1">
-                  <X className="w-5 h-5" />
-                </button>
+        {/* HISTORY DRAWER */}
+        <div 
+          className={`fixed inset-y-0 right-0 z-50 w-full sm:w-[450px] bg-[#050914] border-l border-white/5 shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col ${showHistory ? 'translate-x-0' : 'translate-x-full'}`}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between p-6 border-b border-white/5 bg-black/40">
+            <div className="flex items-center gap-4">
+              <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+                <Clock className="w-5 h-5 text-cyan-400" />
               </div>
-              <div className="p-4 overflow-y-auto flex-grow bg-[#050914]/80">
-                {history.length === 0 ? (
-                  <div className="text-center py-10 text-slate-500 font-mono text-sm">
-                    No scan history available on this device.
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {history.map((item, idx) => (
-                      <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-white/5 bg-black/40 hover:bg-black/60 hover:border-cyan-500/20 transition-all gap-4">
-                        <div className="overflow-hidden">
-                          <div className="text-sm font-mono text-white truncate w-full" title={item.url}>{item.url}</div>
-                          <div className="text-xs text-slate-500 font-mono mt-1">{item.time}</div>
-                        </div>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <span className={`text-xs font-bold uppercase tracking-widest px-2 py-1 rounded-sm border
-                            ${item.status === 'Clean' ? 'bg-cyan-950 text-cyan-400 border-cyan-500/30' : 
-                              (item.status === 'Suspicious' ? 'bg-amber-950 text-amber-400 border-amber-500/30' : 
-                              'bg-rose-950 text-rose-400 border-rose-500/30')}`}>
-                            {item.status}
-                          </span>
-                          <button 
-                            onClick={() => {
-                              setUrl(item.url);
-                              setShowHistory(false);
-                            }}
-                            className="p-2 rounded-lg bg-white/5 hover:bg-cyan-500/20 text-slate-400 hover:text-cyan-400 transition-colors border border-transparent hover:border-cyan-500/30"
-                            title="Load URL"
-                          >
-                            <Search className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              <div>
+                <h3 className="text-lg font-bold text-white tracking-wide leading-tight">Scan History</h3>
+                <p className="text-[10px] font-mono text-cyan-500/70 uppercase tracking-widest mt-1">LOCAL STORAGE - LAST 20 RECORDS</p>
               </div>
             </div>
+            <div className="flex items-center gap-2">
+              <button className="p-2 text-slate-500 hover:text-cyan-400 transition-colors" title="Refresh">
+                <RefreshCw className="w-4 h-4" />
+              </button>
+              <button onClick={() => setShowHistory(false)} className="p-2 text-slate-500 hover:text-rose-400 transition-colors" title="Close">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
+          
+          {/* List */}
+          <div className="flex-grow overflow-y-auto p-4 space-y-4">
+            {history.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-60">
+                <Database className="w-12 h-12 mb-4 text-slate-600" />
+                <p className="font-mono text-xs uppercase tracking-widest">No Records Found</p>
+              </div>
+            ) : (
+              history.map((item, idx) => {
+                const isDangerous = item.status === "High Risk";
+                const isWarning = item.status === "Suspicious";
+                const badgeColor = isDangerous ? 'bg-rose-950 text-rose-400 border-rose-500/30' : (isWarning ? 'bg-amber-950 text-amber-400 border-amber-500/30' : 'bg-cyan-950 text-cyan-400 border-cyan-500/30');
+                const riskColor = isDangerous ? 'text-rose-400' : (isWarning ? 'text-amber-400' : 'text-cyan-400');
+                
+                return (
+                  <div key={idx} className="bg-black/40 border border-white/5 rounded-xl p-5 hover:bg-black/60 hover:border-white/10 transition-colors relative group">
+                    <div className="flex justify-between items-start mb-3">
+                      <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-sm border ${badgeColor} flex items-center gap-1.5`}>
+                        <div className={`w-1.5 h-1.5 rounded-full ${isDangerous ? 'bg-rose-500' : (isWarning ? 'bg-amber-500' : 'bg-cyan-500')}`}></div>
+                        {item.status === 'Clean' ? 'SAFE' : item.status}
+                      </span>
+                      <div className="font-mono text-xs text-slate-500 uppercase flex items-center gap-1.5">
+                        RISK <span className={`text-base font-bold ${riskColor}`}>{item.riskScore}</span> /100
+                      </div>
+                    </div>
+                    
+                    <div className="text-sm font-mono text-white mb-3 truncate w-full" title={item.url}>
+                      {item.url}
+                    </div>
+                    
+                    <div className="flex items-center gap-2 text-xs font-mono text-slate-500 mb-5">
+                      <Clock className="w-3.5 h-3.5" />
+                      {item.time}
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                      <button 
+                        onClick={() => {
+                          setUrl(item.url);
+                          setShowHistory(false);
+                        }}
+                        className="flex-1 py-2 px-3 flex items-center justify-center gap-2 rounded-lg bg-cyan-950/30 hover:bg-cyan-900/50 text-cyan-400 hover:text-cyan-300 transition-colors border border-cyan-500/20 text-[10px] font-mono uppercase tracking-widest"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        RE-SCAN
+                      </button>
+                      <button 
+                        onClick={() => deleteHistoryItem(item.url)}
+                        className="py-2 px-4 flex items-center justify-center gap-2 rounded-lg bg-rose-950/30 hover:bg-rose-900/50 text-rose-400 hover:text-rose-300 transition-colors border border-rose-500/20 text-[10px] font-mono uppercase tracking-widest"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        DELETE
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          
+          {/* Footer */}
+          <div className="p-4 border-t border-white/5 bg-black/40 text-center">
+            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">
+              Showing {history.length} most recent record{history.length !== 1 ? 's' : ''} • Sorted by latest
+            </p>
+          </div>
+        </div>
+        
+        {/* Backdrop overlay */}
+        {showHistory && (
+          <div 
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-in fade-in duration-300" 
+            onClick={() => setShowHistory(false)}
+          ></div>
         )}
 
       </div>
