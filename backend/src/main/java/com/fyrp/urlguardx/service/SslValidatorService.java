@@ -23,11 +23,11 @@ public class SslValidatorService {
     // ─────────────────────────────────────────────────────────────────────
     public ModuleResult validate(String rawUrl) {
 
-        boolean upgraded = false;
-        String  resolvedUrl = rawUrl; // tracks the final URL actually validated
+        boolean upgraded    = false;
+        String  resolvedUrl = rawUrl;
 
         if (!rawUrl.startsWith("https://")) {
-            // HTTP URL — follow redirect chain to find HTTPS
+            // HTTP — follow redirect chain to find HTTPS
             String httpsUrl = resolveHttpsUpgrade(rawUrl);
             if (httpsUrl != null) {
                 log.info("[SSL] Upgraded {} → {}", rawUrl, httpsUrl);
@@ -35,24 +35,28 @@ public class SslValidatorService {
                 rawUrl      = httpsUrl;
                 upgraded    = true;
             } else {
-                return ModuleResult.danger(
+                ModuleResult r = ModuleResult.danger(
                         "No TLS — URL uses plain HTTP. Data transmitted in cleartext; " +
                         "no certificate to inspect. Automatic risk penalty applied.", 70.0);
+                r.setResolvedUrl(rawUrl);
+                return r;
             }
         } else {
-            // Already HTTPS — first check if it DOWNGRADES back to HTTP (e.g. https://neverssl.com → http://neverssl.com)
+            // Already HTTPS — check for HTTPS→HTTP downgrade (server redirect back to HTTP)
             String firstHop = fetchLocation(rawUrl, "HEAD");
             if (firstHop == null) firstHop = fetchLocation(rawUrl, "GET");
 
             if (firstHop != null && firstHop.startsWith("http://")) {
-                log.warn("[SSL] HTTPS→HTTP downgrade detected: {} → {}", rawUrl, firstHop);
-                return ModuleResult.danger(
-                        "HTTPS→HTTP downgrade: this URL redirects back to plain HTTP. " +
+                log.warn("[SSL] HTTPS→HTTP server downgrade: {} → {}", rawUrl, firstHop);
+                ModuleResult r = ModuleResult.danger(
+                        "HTTPS→HTTP downgrade: server redirects back to plain HTTP. " +
                         "Despite the https:// prefix, data is transmitted in cleartext. " +
-                        "Target: " + firstHop, 75.0);
+                        "Redirect target: " + firstHop, 75.0);
+                r.setResolvedUrl(firstHop);
+                return r;
             }
 
-            // Check for HTTPS→HTTPS cross-domain redirects (e.g. flipkart.in → flipkart.com)
+            // Check for cross-domain HTTPS→HTTPS redirects (e.g. flipkart.in → flipkart.com)
             String resolved = resolveHttpsRedirect(rawUrl);
             if (resolved != null && !resolved.equalsIgnoreCase(rawUrl)) {
                 log.info("[SSL] HTTPS cross-domain redirect: {} → {}", rawUrl, resolved);
@@ -76,46 +80,46 @@ public class SslValidatorService {
                 socket = (SSLSocket) factory.createSocket(underlying, host, port, true);
                 socket.setSoTimeout(TIMEOUT_MS);
 
-                // Enable SNI and built-in hostname verification
                 SSLParameters sslParams = socket.getSSLParameters();
                 sslParams.setEndpointIdentificationAlgorithm("HTTPS");
                 socket.setSSLParameters(sslParams);
 
-                socket.startHandshake();  // throws SSLHandshakeException on hostname mismatch
+                socket.startHandshake();
             } catch (javax.net.ssl.SSLHandshakeException sslEx) {
-                return ModuleResult.danger(
+                ModuleResult r = ModuleResult.danger(
                         "TLS handshake failed — certificate is untrusted, self-signed, or hostname mismatch. " +
                         "Detail: " + summarise(sslEx.getMessage()), 85.0);
+                r.setResolvedUrl(resolvedUrl);
+                return r;
             }
 
             // ---- Inspect certificate chain ----
-            Certificate[]  chain  = socket.getSession().getPeerCertificates();
-            String         proto  = socket.getSession().getProtocol();
+            Certificate[]  chain = socket.getSession().getPeerCertificates();
+            String         proto = socket.getSession().getProtocol();
             socket.close();
 
             if (chain == null || chain.length == 0) {
-                return ModuleResult.danger("Server presented an empty certificate chain.", 80.0);
+                ModuleResult r = ModuleResult.danger("Server presented an empty certificate chain.", 80.0);
+                r.setResolvedUrl(resolvedUrl);
+                return r;
             }
 
             X509Certificate leaf = (X509Certificate) chain[0];
 
-            // Expiry check
             Date    notAfter  = leaf.getNotAfter();
             Date    now       = new Date();
             boolean expired   = now.after(notAfter);
             long    daysLeft  = (notAfter.getTime() - now.getTime()) / 86_400_000L;
-
-            // Self-signed check (issuer == subject)
-            boolean selfSigned = leaf.getIssuerX500Principal()
-                                     .equals(leaf.getSubjectX500Principal());
-
-            String issuer  = leaf.getIssuerX500Principal().getName();
-            String subject = leaf.getSubjectX500Principal().getName();
-
-            // ---- Protocol penalty ----
+            boolean selfSigned = leaf.getIssuerX500Principal().equals(leaf.getSubjectX500Principal());
+            String  issuer    = leaf.getIssuerX500Principal().getName();
             boolean weakProto = proto.equals("TLSv1") || proto.equals("TLSv1.1") || proto.equals("SSLv3");
 
-            // ---- Build result ----
+            // ---- HTTPS enforcement check ----
+            // A valid cert alone doesn't mean HTTPS is the canonical protocol.
+            // Sites like neverssl.com have a CDN cert but serve real content over HTTP.
+            // If http://host → 200 (no HTTPS redirect), the site is HTTP-primary — flag it.
+            boolean httpsEnforced = isHttpsEnforced(host);
+
             String prefix = upgraded ? "[Upgraded to HTTPS] " : "";
 
             ModuleResult r;
@@ -127,6 +131,13 @@ public class SslValidatorService {
                 r = ModuleResult.warning(
                         prefix + "Self-signed certificate detected. Issuer equals subject — not trusted by browsers. " +
                         "Expires: " + notAfter + ".", 55.0);
+            } else if (!httpsEnforced) {
+                r = ModuleResult.danger(
+                        prefix + String.format(
+                                "Certificate present (issued by %s) but HTTPS is NOT enforced — " +
+                                "the HTTP version of this host is accessible without redirect to HTTPS. " +
+                                "This site operates primarily over plain HTTP.",
+                                shortName(issuer)), 72.0);
             } else if (daysLeft < 30) {
                 r = ModuleResult.warning(
                         prefix + String.format("Certificate expiring soon (%d days left). Issuer: %s. Protocol: %s.",
@@ -137,17 +148,17 @@ public class SslValidatorService {
                         "Cert issued by: " + shortName(issuer) + ".", 30.0);
             } else {
                 r = ModuleResult.clean(
-                        prefix + String.format("Valid TLS certificate. Issued by: %s. Expires in %d days. Protocol: %s.",
+                        prefix + String.format("Valid TLS certificate. Issued by: %s. Expires in %d days. Protocol: %s. HTTPS enforced.",
                                 shortName(issuer), daysLeft, proto), 5.0);
             }
-            r.setResolvedUrl(resolvedUrl); // attach final URL — no extra network call
+            r.setResolvedUrl(resolvedUrl);
             return r;
 
         } catch (Exception e) {
             log.warn("[SSL] Validation error for {}: {}", rawUrl, e.getMessage());
             ModuleResult r = ModuleResult.warning(
                     "SSL validation could not complete — host unreachable or connection timed out. " +
-                    "This is suspicious for an HTTPS URL: " + summarise(e.getMessage()), 40.0);
+                    "Detail: " + summarise(e.getMessage()), 40.0);
             r.setResolvedUrl(resolvedUrl);
             return r;
         }
@@ -158,33 +169,28 @@ public class SslValidatorService {
     // ─────────────────────────────────────────────────────────────────────
 
     /**
-     * Returns the final URL after following all redirects, for display purposes.
-     * Used by AgenticControllerService to populate the resolvedUrl in ScanResponse.
-     * e.g. "http://flipkart.in" → "https://www.flipkart.com"
-     *      "https://neverssl.com" → "http://neverssl.com"  (downgrade detected)
-     *      "https://google.com"  → "https://www.google.com"
+     * Returns true if http://host redirects to an HTTPS URL (HTTPS is enforced).
+     * neverssl.com → http://neverssl.com returns 200 → false (not enforced) → Danger
+     * google.com   → http://google.com   returns 301 → https://... → true (enforced) → Clean
      */
-    public String resolveUrl(String canonicalUrl) {
-        if (!canonicalUrl.startsWith("https://")) {
-            // HTTP → follow upgrade chain
-            String upgraded = resolveHttpsUpgrade(canonicalUrl);
-            return upgraded != null ? upgraded : canonicalUrl;
+    private boolean isHttpsEnforced(String host) {
+        String httpUrl = "http://" + host;
+        try {
+            String loc = fetchLocation(httpUrl, "HEAD");
+            if (loc == null) loc = fetchLocation(httpUrl, "GET");
+            boolean enforced = loc != null && loc.startsWith("https://");
+            log.info("[SSL] HTTPS enforcement for {}: {}", host, enforced ? "YES" : "NO");
+            return enforced;
+        } catch (Exception e) {
+            log.warn("[SSL] Enforcement check failed for {}: {}", host, e.getMessage());
+            return true; // assume enforced on error — avoid false positives
         }
-        // HTTPS → check for downgrade or cross-domain
-        String firstHop = fetchLocation(canonicalUrl, "HEAD");
-        if (firstHop == null) firstHop = fetchLocation(canonicalUrl, "GET");
-        if (firstHop != null && firstHop.startsWith("http://")) {
-            return firstHop; // downgrade destination
-        }
-        String crossDomain = resolveHttpsRedirect(canonicalUrl);
-        return (crossDomain != null) ? crossDomain : canonicalUrl;
     }
 
     /**
-     * For an already-HTTPS URL, follow any cross-domain HTTPS→HTTPS redirects
-     * (e.g. https://flipkart.in → https://www.flipkart.com) so the SSL check
-     * validates the certificate of the *final* host, not the entry host.
-     * Returns null if there is no redirect or if the chain stays on the same host.
+     * For an already-HTTPS URL, follow HTTPS→HTTPS cross-domain redirects
+     * (e.g. https://flipkart.in → https://www.flipkart.com).
+     * Stops and returns null if a redirect to HTTP is encountered.
      */
     private String resolveHttpsRedirect(String httpsUrl) {
         final int MAX_HOPS = 5;
@@ -207,7 +213,6 @@ public class SslValidatorService {
                 String location = conn.getHeaderField("Location");
                 if (location == null || location.isBlank()) break;
 
-                // Resolve relative locations
                 if (location.startsWith("/")) {
                     URL base = new URL(current);
                     location = base.getProtocol() + "://" + base.getHost() + location;
@@ -218,7 +223,7 @@ public class SslValidatorService {
                 if (location.startsWith("https://")) {
                     current = location;
                 } else {
-                    break; // Redirect to HTTP — stop (handled by resolveHttpsUpgrade)
+                    break;
                 }
             } catch (Exception e) {
                 log.warn("[SSL] HTTPS redirect follow failed at hop {}: {}", hop, e.getMessage());
@@ -230,14 +235,8 @@ public class SslValidatorService {
 
     /**
      * Follow the redirect chain for an HTTP URL.
-     * Returns the first HTTPS URL found in the chain, or null if the chain
-     * never reaches HTTPS (or exceeds MAX_REDIRECTS without finding it).
-     *
-     * Handles multi-hop chains such as:
-     *   http://google.com → http://www.google.com → https://www.google.com  ✅
-     *
-     * Falls back from HEAD to GET if the server returns an unexpected status
-     * (some servers, including Google, block HEAD from non-browser clients).
+     * Returns the first HTTPS URL found in the chain, or null if none found.
+     * Falls back from HEAD to GET for servers that block HEAD (e.g. Google).
      */
     private String resolveHttpsUpgrade(String rawUrl) {
         final int MAX_REDIRECTS = 8;
@@ -245,32 +244,28 @@ public class SslValidatorService {
 
         for (int hop = 0; hop < MAX_REDIRECTS; hop++) {
             String location = fetchLocation(currentUrl, "HEAD");
-
-            // HEAD might be blocked (e.g. Google returns 405) — retry with GET
-            if (location == null) {
-                location = fetchLocation(currentUrl, "GET");
-            }
+            if (location == null) location = fetchLocation(currentUrl, "GET");
 
             if (location == null) {
-                log.info("[SSL] Chain ended at hop {} with no redirect location — no HTTPS upgrade", hop);
+                log.info("[SSL] Chain ended at hop {} — no HTTPS upgrade", hop);
                 return null;
             }
 
             log.info("[SSL] Redirect hop {}: {} → {}", hop, currentUrl, location);
 
             if (location.startsWith("https://")) {
-                return location; // ✅ Found HTTPS
+                return location;
             }
-            currentUrl = location; // Still HTTP, keep following
+            currentUrl = location;
         }
 
-        log.warn("[SSL] Exceeded {} redirect hops without reaching HTTPS for {}", MAX_REDIRECTS, rawUrl);
+        log.warn("[SSL] Exceeded max redirect hops for {}", rawUrl);
         return null;
     }
 
     /**
-     * Make a HEAD or GET request and return the Location header if the response
-     * is a redirect (3xx), or null otherwise (including on error or non-redirect).
+     * Make a HEAD or GET request and return the Location header if it's a redirect (3xx),
+     * or null otherwise (including on error or non-redirect responses).
      */
     private String fetchLocation(String url, String method) {
         try {
@@ -293,7 +288,6 @@ public class SslValidatorService {
             String location = conn.getHeaderField("Location");
             if (location == null || location.isBlank()) return null;
 
-            // Resolve relative and scheme-relative URLs
             if (location.startsWith("//")) {
                 return "https:" + location;
             } else if (location.startsWith("/")) {
@@ -312,10 +306,8 @@ public class SslValidatorService {
         }
     }
 
-
     private String shortName(String dn) {
         if (dn == null) return "Unknown";
-        // Extract CN or O from the X500 distinguished name
         for (String part : dn.split(",")) {
             if (part.trim().startsWith("O=") && !part.trim().startsWith("OU=")) {
                 return part.trim().substring(2);
