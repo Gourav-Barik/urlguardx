@@ -8,8 +8,10 @@ import org.springframework.stereotype.Service;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.URL;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 public class UrlHausFeedService {
@@ -19,18 +21,30 @@ public class UrlHausFeedService {
     private static final String FEED_URL =
             "https://urlhaus.abuse.ch/downloads/csv/";
 
-    // Exact URL match
-    private final Set<String> maliciousUrls = new HashSet<>();
+    // Thread-safe sets (written by background thread, read by request threads)
+    private final Set<String> maliciousUrls    = Collections.synchronizedSet(new HashSet<>());
+    private final Set<String> maliciousDomains = Collections.synchronizedSet(new HashSet<>());
 
-    // Domain-level match (NEW)
-    private final Set<String> maliciousDomains = new HashSet<>();
+    // True once the feed has been successfully loaded
+    private final AtomicBoolean feedReady = new AtomicBoolean(false);
 
+    /**
+     * Kick off the UrlHaus feed download in a background daemon thread so it does
+     * NOT block Spring's main startup thread. Tomcat binds its port immediately and
+     * the threat feed becomes available within ~10 s of startup.
+     */
     @PostConstruct
-    public void loadFeed() {
+    public void loadFeedAsync() {
+        Thread t = new Thread(this::loadFeed, "urlhaus-loader");
+        t.setDaemon(true);
+        t.start();
+    }
 
-        log.info("[URLHAUS] Downloading CSV threat feed...");
+    private void loadFeed() {
 
-        int urlCount = 0;
+        log.info("[URLHAUS] Downloading CSV threat feed (background)...");
+
+        int urlCount    = 0;
         int domainCount = 0;
 
         try (BufferedReader reader = new BufferedReader(
@@ -55,7 +69,7 @@ public class UrlHausFeedService {
                     maliciousUrls.add(url);
                     urlCount++;
 
-                    // 2️⃣ Domain extraction (NEW)
+                    // 2️⃣ Domain extraction
                     try {
                         String host = new URL(url).getHost();
                         if (host != null && !host.isBlank()) {
@@ -68,8 +82,8 @@ public class UrlHausFeedService {
                 }
             }
 
-            log.info("[URLHAUS] Loaded {} malicious URLs", urlCount);
-            log.info("[URLHAUS] Loaded {} malicious domains", domainCount);
+            feedReady.set(true);
+            log.info("[URLHAUS] Feed ready — {} malicious URLs, {} malicious domains", urlCount, domainCount);
 
         } catch (Exception e) {
             log.error("[URLHAUS] Failed to load feed: {}", e.getMessage());
@@ -80,16 +94,16 @@ public class UrlHausFeedService {
     // Exact URL check
     // ─────────────────────────────────────────────
     public boolean isMalicious(String url) {
-        if (url == null || url.isBlank()) return false;
+        if (!feedReady.get() || url == null || url.isBlank()) return false;
         return maliciousUrls.contains(url.trim());
     }
 
     // ─────────────────────────────────────────────
-    // Domain-level check (NEW FEATURE)
+    // Domain-level check
     // ─────────────────────────────────────────────
     public boolean isMaliciousDomain(String url) {
 
-        if (url == null || url.isBlank()) return false;
+        if (!feedReady.get() || url == null || url.isBlank()) return false;
 
         try {
             if (!url.startsWith("http")) {
