@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+data/
+*.csv
+data/openphish.txt
+*.csv
+.env
+.git
+.gitignore

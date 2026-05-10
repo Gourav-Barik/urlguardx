@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+/* Custom scrollbar to match the cybernetic theme */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #020617; 
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b; 
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #06b6d4; 
+}
+
+/* Typing effect for the terminal */
+.typing-effect {
+  overflow: hidden;
+  white-space: nowrap;
+  animation: typing 0.3s steps(40, end);
+}
+
+@keyframes typing {
+  from { width: 0 }
+  to { width: 100% }
+}

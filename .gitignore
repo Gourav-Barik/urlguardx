@@ -1,0 +1,19 @@
+# Global overrides & root-level ignored files
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Root level specific files
+history.json
+deployed_frontend.js
+scratch/
+
+# If there are any loose environment files in the root
+.env
+.env.*

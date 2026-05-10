@@ -1,0 +1,43 @@
+# ============================================================
+#  URLGuardX — .dockerignore
+# ============================================================
+
+# Maven build output (builder stage handles this fresh)
+target/
+
+# IntelliJ IDEA project files
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Git
+.git/
+.gitignore
+
+# Environment & secrets — NEVER bake into image
+.env
+*.env
+.env.*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test reports
+**/surefire-reports/
+**/failsafe-reports/
+
+# Docker files themselves (no need to copy into image)
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# README / docs
+README.md
+*.md
