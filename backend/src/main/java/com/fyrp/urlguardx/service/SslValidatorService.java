@@ -10,11 +10,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
-import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.Date;
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.HostnameVerifier;
 
 @Service
 public class SslValidatorService {
@@ -48,6 +44,11 @@ public class SslValidatorService {
             int    port = url.getPort() < 0 ? 443 : url.getPort();
 
             // ---- Open SSL handshake ----
+            // Use SSLParameters with HTTPS endpoint identification so the JVM engine
+            // validates the hostname (SNI + RFC 2818) *during* the handshake itself.
+            // This is more reliable than the post-hoc HttpsURLConnection verifier,
+            // which often returns false even for valid certs when used outside a real
+            // HttpsURLConnection context.
             SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
             SSLSocket socket;
             try {
@@ -55,20 +56,17 @@ public class SslValidatorService {
                 underlying.connect(new java.net.InetSocketAddress(host, port), TIMEOUT_MS);
                 socket = (SSLSocket) factory.createSocket(underlying, host, port, true);
                 socket.setSoTimeout(TIMEOUT_MS);
-                socket.startHandshake();
+
+                // Enable SNI and built-in hostname verification
+                SSLParameters sslParams = socket.getSSLParameters();
+                sslParams.setEndpointIdentificationAlgorithm("HTTPS");
+                socket.setSSLParameters(sslParams);
+
+                socket.startHandshake();  // throws SSLHandshakeException on hostname mismatch
             } catch (javax.net.ssl.SSLHandshakeException sslEx) {
                 return ModuleResult.danger(
                         "TLS handshake failed — certificate is untrusted, self-signed, or hostname mismatch. " +
                         "Detail: " + summarise(sslEx.getMessage()), 85.0);
-            }
-            boolean hostnameValid = HttpsURLConnection.getDefaultHostnameVerifier()
-                    .verify(host, socket.getSession());
-
-            if (!hostnameValid) {
-                return ModuleResult.danger(
-                        "Certificate hostname mismatch — domain does not match certificate subject.",
-                        90.0
-                );
             }
             // ---- Inspect certificate chain ----
             Certificate[]  chain  = socket.getSession().getPeerCertificates();
