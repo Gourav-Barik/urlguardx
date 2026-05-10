@@ -351,21 +351,9 @@ const handleRetry = async () => {
                 </div>
               </div>
               
-              <div className="flex items-center gap-4">
-                <div className="relative group">
-                  <button 
-                    onClick={() => setShowHistory(true)}
-                    className="flex items-center justify-center p-2.5 border border-white/10 bg-black/40 rounded-md shadow-inner text-slate-400 hover:text-cyan-400 hover:border-cyan-500/30 transition-all"
-                  >
-                    <Clock className="w-5 h-5" />
-                  </button>
-                  <div className="absolute top-full right-0 mt-2 w-max opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
-                    <div className="bg-black/90 border border-cyan-500/30 text-cyan-400 text-[10px] font-mono px-2 py-1 rounded shadow-lg">
-                      HISTORY
-                    </div>
-                  </div>
-                </div>
-                <div className="hidden md:flex items-center gap-3 font-mono text-xs border border-white/10 bg-black/40 px-4 py-2 rounded-md shadow-inner">
+              <div className="flex items-center gap-3">
+                {/* SYSTEM / NODE status block */}
+                <div className="hidden md:flex items-center gap-3 font-mono text-xs border border-white/10 bg-black/40 px-4 h-9 rounded-md shadow-inner">
                   <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
                   <span className="text-slate-400">SYSTEM:</span>
                   <span className="text-emerald-400">ONLINE</span>
@@ -374,6 +362,22 @@ const handleRetry = async () => {
                   <span className="text-cyan-400">AP-SOUTH-1</span>
                 </div>
 
+                {/* HISTORY button — same height as status block, cyan default */}
+                <div className="relative group">
+                  <button
+                    onClick={() => setShowHistory(true)}
+                    className="flex items-center gap-2 font-mono text-xs border border-white/10 bg-black/40 px-4 h-9 rounded-md shadow-inner text-cyan-400 border-cyan-500/20 transition-colors duration-200 hover:bg-black/60"
+                  >
+                    <Clock className="w-3.5 h-3.5" />
+                    <span className="tracking-widest uppercase">History</span>
+                  </button>
+                  {/* Tooltip */}
+                  <div className="absolute top-full right-0 mt-2 w-max opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
+                    <div className="bg-black/90 border border-white/10 text-slate-300 text-[10px] font-mono px-2 py-1 rounded shadow-lg">
+                      View Scan History
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -663,9 +667,6 @@ const handleRetry = async () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button className="p-2 text-slate-500 hover:text-cyan-400 transition-colors" title="Refresh">
-                <RefreshCw className="w-4 h-4" />
-              </button>
               <button onClick={() => setShowHistory(false)} className="p-2 text-slate-500 hover:text-rose-400 transition-colors" title="Close">
                 <X className="w-5 h-5" />
               </button>
