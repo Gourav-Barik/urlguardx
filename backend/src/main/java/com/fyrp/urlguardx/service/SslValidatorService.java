@@ -24,27 +24,41 @@ public class SslValidatorService {
     public ModuleResult validate(String rawUrl) {
 
         boolean upgraded = false;
+        String  resolvedUrl = rawUrl; // tracks the final URL actually validated
 
         if (!rawUrl.startsWith("https://")) {
-            // HTTP URL — try to follow redirect chain to HTTPS
+            // HTTP URL — follow redirect chain to find HTTPS
             String httpsUrl = resolveHttpsUpgrade(rawUrl);
             if (httpsUrl != null) {
                 log.info("[SSL] Upgraded {} → {}", rawUrl, httpsUrl);
-                rawUrl   = httpsUrl;
-                upgraded = true;
+                resolvedUrl = httpsUrl;
+                rawUrl      = httpsUrl;
+                upgraded    = true;
             } else {
                 return ModuleResult.danger(
                         "No TLS — URL uses plain HTTP. Data transmitted in cleartext; " +
                         "no certificate to inspect. Automatic risk penalty applied.", 70.0);
             }
         } else {
-            // Already HTTPS — but check if the server redirects cross-domain (e.g. flipkart.in → flipkart.com)
-            // so we validate the cert of the *final* host, not the entry host.
+            // Already HTTPS — first check if it DOWNGRADES back to HTTP (e.g. https://neverssl.com → http://neverssl.com)
+            String firstHop = fetchLocation(rawUrl, "HEAD");
+            if (firstHop == null) firstHop = fetchLocation(rawUrl, "GET");
+
+            if (firstHop != null && firstHop.startsWith("http://")) {
+                log.warn("[SSL] HTTPS→HTTP downgrade detected: {} → {}", rawUrl, firstHop);
+                return ModuleResult.danger(
+                        "HTTPS→HTTP downgrade: this URL redirects back to plain HTTP. " +
+                        "Despite the https:// prefix, data is transmitted in cleartext. " +
+                        "Target: " + firstHop, 75.0);
+            }
+
+            // Check for HTTPS→HTTPS cross-domain redirects (e.g. flipkart.in → flipkart.com)
             String resolved = resolveHttpsRedirect(rawUrl);
             if (resolved != null && !resolved.equalsIgnoreCase(rawUrl)) {
                 log.info("[SSL] HTTPS cross-domain redirect: {} → {}", rawUrl, resolved);
-                rawUrl   = resolved;
-                upgraded = true;
+                resolvedUrl = resolved;
+                rawUrl      = resolved;
+                upgraded    = true;
             }
         }
 
@@ -141,6 +155,29 @@ public class SslValidatorService {
     // ─────────────────────────────────────────────────────────────────────
     //  Helpers
     // ─────────────────────────────────────────────────────────────────────
+
+    /**
+     * Returns the final URL after following all redirects, for display purposes.
+     * Used by AgenticControllerService to populate the resolvedUrl in ScanResponse.
+     * e.g. "http://flipkart.in" → "https://www.flipkart.com"
+     *      "https://neverssl.com" → "http://neverssl.com"  (downgrade detected)
+     *      "https://google.com"  → "https://www.google.com"
+     */
+    public String resolveUrl(String canonicalUrl) {
+        if (!canonicalUrl.startsWith("https://")) {
+            // HTTP → follow upgrade chain
+            String upgraded = resolveHttpsUpgrade(canonicalUrl);
+            return upgraded != null ? upgraded : canonicalUrl;
+        }
+        // HTTPS → check for downgrade or cross-domain
+        String firstHop = fetchLocation(canonicalUrl, "HEAD");
+        if (firstHop == null) firstHop = fetchLocation(canonicalUrl, "GET");
+        if (firstHop != null && firstHop.startsWith("http://")) {
+            return firstHop; // downgrade destination
+        }
+        String crossDomain = resolveHttpsRedirect(canonicalUrl);
+        return (crossDomain != null) ? crossDomain : canonicalUrl;
+    }
 
     /**
      * For an already-HTTPS URL, follow any cross-domain HTTPS→HTTPS redirects

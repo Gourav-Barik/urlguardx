@@ -287,11 +287,12 @@ const handleRetry = async () => {
     setResult({
       ...data, theme, icon: mainIcon, scanTimeIST: getDisplayISTTime(),
       canonicalUrl: data.canonicalUrl || url,
+      resolvedUrl:  data.resolvedUrl  || null,
       modules: {
-        lexical: { ...data.modules.lexical, icon: getModuleIcon(data.modules.lexical.status) },
-        domain: { ...data.modules.domain, icon: getModuleIcon(data.modules.domain.status) },
-        ssl: { ...data.modules.ssl, icon: getModuleIcon(data.modules.ssl.status) },
-        blacklist: { ...data.modules.blacklist, icon: getModuleIcon(data.modules.blacklist.status) },
+        lexical:   { ...data.modules.lexical,   icon: getModuleIcon(data.modules.lexical.status)   },
+        domain:    { ...data.modules.domain,     icon: getModuleIcon(data.modules.domain.status)    },
+        ssl:       { ...data.modules.ssl,        icon: getModuleIcon(data.modules.ssl.status)       },
+        blacklist: { ...data.modules.blacklist,  icon: getModuleIcon(data.modules.blacklist.status) },
       }
     });
 
@@ -592,6 +593,11 @@ const handleRetry = async () => {
                       <div className="overflow-hidden w-full">
                         <span className="text-[10px] font-mono text-slate-500 uppercase block mb-1">Analyzed Vector</span>
                         <span className="text-sm text-white font-mono truncate block w-full" title={result.canonicalUrl}>{result.canonicalUrl}</span>
+                        {result.resolvedUrl && result.resolvedUrl !== result.canonicalUrl && (
+                          <span className="text-xs font-mono text-cyan-400/70 truncate block w-full mt-1" title={result.resolvedUrl}>
+                            → {result.resolvedUrl}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="bg-[#050914] border border-white/5 rounded-lg p-4 flex items-start gap-3">

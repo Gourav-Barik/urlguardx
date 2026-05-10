@@ -141,7 +141,8 @@ public class AgenticControllerService {
                 );
 
         ScanResponse response = new ScanResponse();
-        response.setCanonicalUrl(url);      // ← the fully canonicalized URL
+        response.setCanonicalUrl(url);      // ← the normalized input URL
+        response.setResolvedUrl(sslService.resolveUrl(url)); // ← after redirect chain
         response.setRiskScore(score);
         response.setStatus(status);
         response.setExplanation(explanation);
