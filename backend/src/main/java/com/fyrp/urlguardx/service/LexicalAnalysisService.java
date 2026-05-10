@@ -11,7 +11,10 @@ import org.springframework.web.reactive.function.client.WebClient;
 import java.net.URL;
 import java.time.Duration;
 import java.util.Map;
+import jakarta.annotation.PostConstruct;
+import java.net.URI;
 import java.util.Set;
+
 
 @Service
 public class LexicalAnalysisService {
@@ -41,6 +44,20 @@ public class LexicalAnalysisService {
 
     public LexicalAnalysisService(WebClient.Builder builder) {
         this.webClient = builder.build();
+    }
+
+    // Normalize ML service URL — strip any trailing path (e.g. /predict) so we
+    // always build /predict and /health correctly from the base origin.
+    @PostConstruct
+    private void normalizeMlServiceUrl() {
+        try {
+            URI uri = new URI(mlServiceUrl);
+            mlServiceUrl = uri.getScheme() + "://" + uri.getHost()
+                    + (uri.getPort() != -1 ? ":" + uri.getPort() : "");
+            log.info("[LEXICAL-ML] Normalized ML_SERVICE_URL to base: {}", mlServiceUrl);
+        } catch (Exception e) {
+            log.warn("[LEXICAL-ML] Could not normalize ML_SERVICE_URL: {}", e.getMessage());
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
