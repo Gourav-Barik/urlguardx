@@ -141,8 +141,10 @@ public class AgenticControllerService {
                 );
 
         ScanResponse response = new ScanResponse();
-        response.setCanonicalUrl(url);      // ← the normalized input URL
-        response.setResolvedUrl(sslService.resolveUrl(url)); // ← after redirect chain
+        response.setCanonicalUrl(url);
+        // resolvedUrl comes from the SSL module — already computed during validate(), no extra network call
+        String resolvedUrl = ssl.getResolvedUrl();
+        response.setResolvedUrl(resolvedUrl != null ? resolvedUrl : url);
         response.setRiskScore(score);
         response.setStatus(status);
         response.setExplanation(explanation);

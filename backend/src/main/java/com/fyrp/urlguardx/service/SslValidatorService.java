@@ -118,39 +118,40 @@ public class SslValidatorService {
             // ---- Build result ----
             String prefix = upgraded ? "[Upgraded to HTTPS] " : "";
 
+            ModuleResult r;
             if (expired) {
-                return ModuleResult.danger(
+                r = ModuleResult.danger(
                         prefix + "Certificate EXPIRED. Issued by: " + shortName(issuer) +
                         ". Expired on: " + notAfter + ". This is a critical security failure.", 90.0);
-            }
-            if (selfSigned) {
-                return ModuleResult.warning(
+            } else if (selfSigned) {
+                r = ModuleResult.warning(
                         prefix + "Self-signed certificate detected. Issuer equals subject — not trusted by browsers. " +
                         "Expires: " + notAfter + ".", 55.0);
-            }
-            if (daysLeft < 30) {
-                return ModuleResult.warning(
+            } else if (daysLeft < 30) {
+                r = ModuleResult.warning(
                         prefix + String.format("Certificate expiring soon (%d days left). Issuer: %s. Protocol: %s.",
                                 daysLeft, shortName(issuer), proto), 35.0);
-            }
-            if (weakProto) {
-                return ModuleResult.warning(
+            } else if (weakProto) {
+                r = ModuleResult.warning(
                         prefix + "Weak TLS protocol in use: " + proto + ". Upgrade to TLS 1.2+ recommended. " +
                         "Cert issued by: " + shortName(issuer) + ".", 30.0);
+            } else {
+                r = ModuleResult.clean(
+                        prefix + String.format("Valid TLS certificate. Issued by: %s. Expires in %d days. Protocol: %s.",
+                                shortName(issuer), daysLeft, proto), 5.0);
             }
-
-            return ModuleResult.clean(
-                    prefix + String.format("Valid TLS certificate. Issued by: %s. Expires in %d days. Protocol: %s.",
-                            shortName(issuer), daysLeft, proto), 5.0);
+            r.setResolvedUrl(resolvedUrl); // attach final URL — no extra network call
+            return r;
 
         } catch (Exception e) {
             log.warn("[SSL] Validation error for {}: {}", rawUrl, e.getMessage());
-            return ModuleResult.warning(
+            ModuleResult r = ModuleResult.warning(
                     "SSL validation could not complete — host unreachable or connection timed out. " +
                     "This is suspicious for an HTTPS URL: " + summarise(e.getMessage()), 40.0);
+            r.setResolvedUrl(resolvedUrl);
+            return r;
         }
     }
-
 
     // ─────────────────────────────────────────────────────────────────────
     //  Helpers

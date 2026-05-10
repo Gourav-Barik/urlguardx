@@ -11,9 +11,10 @@ package com.fyrp.urlguardx.dto;
  */
 public class ModuleResult {
 
-    private String status;   // Clean | Warning | Danger | Skipped
-    private String details;  // Human-readable explanation shown in the dashboard card
-    private double score;    // Raw module score 0-100 (not displayed, used by Risk Engine)
+    private String status;      // Clean | Warning | Danger | Skipped
+    private String details;     // Human-readable explanation shown in the dashboard card
+    private double score;       // Raw module score 0-100 (not displayed, used by Risk Engine)
+    private String resolvedUrl; // (SSL module only) final URL after redirect chain
 
     public ModuleResult() {}
 
@@ -29,10 +30,12 @@ public class ModuleResult {
     public static ModuleResult danger(String details, double score)  { return new ModuleResult("Danger",  details, score); }
     public static ModuleResult skipped(String reason)                { return new ModuleResult("Skipped", reason,  0.0);   }
 
-    public String  getStatus()  { return status;  }
+    public String  getStatus()       { return status;  }
     public void    setStatus(String status) { this.status = status; }
-    public String  getDetails() { return details; }
+    public String  getDetails()      { return details; }
     public void    setDetails(String details) { this.details = details; }
-    public double  getScore()   { return score;   }
+    public double  getScore()        { return score;   }
     public void    setScore(double score) { this.score = score; }
+    public String  getResolvedUrl()  { return resolvedUrl; }
+    public void    setResolvedUrl(String resolvedUrl) { this.resolvedUrl = resolvedUrl; }
 }
