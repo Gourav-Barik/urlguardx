@@ -13,7 +13,19 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [scanLogs, setScanLogs] = useState([]);
   const [errorMsg, setErrorMsg] = useState('');
+  const [urlError, setUrlError] = useState('');
   const logsEndRef = useRef(null);
+
+  // --- URL VALIDATION ---
+  // Accepts: google.com, http://google.com, https://sub.google.co.in/path
+  // Rejects: google, localhost, 123
+  const isValidUrl = (input) => {
+    const trimmed = input.trim();
+    // Strip scheme if present to validate the host part
+    const withoutScheme = trimmed.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+    // Must contain at least one dot followed by 1+ letters (i.e. a real TLD)
+    return /^[^\s/]+\.[a-zA-Z]{2,}/.test(withoutScheme);
+  };
 
   // History State
   const [history, setHistory] = useState(() => {
@@ -104,7 +116,15 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
   // --- MAIN SCAN HANDLER (STRICT BACKEND ENFORCEMENT) ---
   const handleScan = async (e) => {
   e.preventDefault();
-  if (!url.trim()) return;
+  const trimmedUrl = url.trim();
+  if (!trimmedUrl) return;
+
+  // Client-side domain validation
+  if (!isValidUrl(trimmedUrl)) {
+    setUrlError('Please enter a valid URL with a domain name (e.g. google.com or https://google.com)');
+    return;
+  }
+  setUrlError('');
 
   setAppState('SCANNING');
   setResult(null);
@@ -387,9 +407,9 @@ const handleRetry = async () => {
                 <input 
                   type="text" 
                   value={url}
-                  onChange={(e) => setUrl(e.target.value)}
+                  onChange={(e) => { setUrl(e.target.value); if (urlError) setUrlError(''); }}
                   placeholder="Enter target URI vector (e.g., https://secure-login.com)"
-                  className="w-full py-4 pr-4 bg-transparent border-none focus:outline-none text-white text-lg font-mono placeholder-slate-600"
+                  className={`w-full py-4 pr-4 bg-transparent border-none focus:outline-none text-white text-lg font-mono placeholder-slate-600 ${urlError ? 'text-rose-300' : ''}`}
                   disabled={appState === 'SCANNING'}
                   required
                 />
@@ -404,6 +424,14 @@ const handleRetry = async () => {
                 </button>
               </div>
             </form>
+
+            {/* Inline URL validation error */}
+            {urlError && (
+              <div className="flex items-center gap-3 mt-3 px-4 py-3 rounded-xl bg-rose-500/10 border border-rose-500/25 animate-in fade-in slide-in-from-top-2 duration-300">
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span className="text-rose-300 text-sm font-mono">{urlError}</span>
+              </div>
+            )}
             
             {appState === 'IDLE' && (
               <div className="flex justify-center gap-10 mt-8 text-xs font-mono text-cyan-300 opacity-70">

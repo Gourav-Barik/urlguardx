@@ -50,9 +50,24 @@ public class ScanController {
             url = "https://" + url;
         }
 
-        // ✅ STEP 2 — Validate URL format
+        // ✅ STEP 2 — Validate URL format and require a proper domain (with TLD)
         try {
-            new java.net.URL(url);
+            java.net.URL parsed = new java.net.URL(url);
+            String host = parsed.getHost();
+            // Reject bare hostnames with no dot (e.g. "google", "localhost")
+            if (host == null || !host.contains(".")) {
+                log.warn("[CONTROLLER] URL has no valid domain/TLD: {}", url);
+                throw new IllegalArgumentException("URL must contain a valid domain name with a TLD (e.g. google.com)");
+            }
+            // Reject TLDs that are purely numeric (IP-like but malformed)
+            String[] parts = host.split("\\.");
+            String tld = parts[parts.length - 1];
+            if (tld.matches("\\d+")) {
+                log.warn("[CONTROLLER] URL has numeric TLD — not a domain name: {}", url);
+                throw new IllegalArgumentException("URL must contain a valid domain name with a TLD (e.g. google.com)");
+            }
+        } catch (IllegalArgumentException iae) {
+            throw iae; // re-throw our own validation errors
         } catch (Exception e) {
             log.warn("[CONTROLLER] Invalid URL received: {}", url);
             throw new IllegalArgumentException("Invalid URL format");

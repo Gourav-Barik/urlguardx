@@ -135,48 +135,80 @@ public class SslValidatorService {
     //  Helpers
     // ─────────────────────────────────────────────────────────────────────
 
+    /**
+     * Follow the redirect chain for a non-HTTPS URL.
+     * Returns the first HTTPS URL found in the chain, or null if the chain
+     * never reaches HTTPS (or exceeds MAX_REDIRECTS without finding it).
+     *
+     * Handles multi-hop chains such as:
+     *   http://google.com → http://www.google.com → https://www.google.com  ✅
+     */
     private String resolveHttpsUpgrade(String rawUrl) {
+        final int MAX_REDIRECTS = 8;
         String currentUrl = rawUrl;
-        int redirects = 0;
-        while (redirects < 3) {
+
+        for (int hop = 0; hop < MAX_REDIRECTS; hop++) {
             try {
                 HttpURLConnection conn = (HttpURLConnection) new URL(currentUrl).openConnection();
                 conn.setInstanceFollowRedirects(false);
                 conn.setConnectTimeout(TIMEOUT_MS);
                 conn.setReadTimeout(TIMEOUT_MS);
                 conn.setRequestMethod("HEAD");
+                conn.setRequestProperty("User-Agent",
+                        "Mozilla/5.0 (compatible; URLGuardX-SecurityScanner/1.0)");
 
                 int status = conn.getResponseCode();
-                if (status == HttpURLConnection.HTTP_MOVED_PERM ||
-                    status == HttpURLConnection.HTTP_MOVED_TEMP ||
-                    status == HttpURLConnection.HTTP_SEE_OTHER ||
-                    status == 307 || status == 308) {
-                    
-                    String location = conn.getHeaderField("Location");
-                    if (location != null) {
-                        if (location.startsWith("https://")) {
-                            return location;
-                        } else if (location.startsWith("http://")) {
-                            currentUrl = location;
-                            redirects++;
-                            continue;
-                        } else if (location.startsWith("/")) {
-                            // relative redirect
-                            URL urlObj = new URL(currentUrl);
-                            currentUrl = urlObj.getProtocol() + "://" + urlObj.getHost() + location;
-                            redirects++;
-                            continue;
-                        }
-                    }
+                log.info("[SSL] Redirect hop {}: {} → status {}", hop, currentUrl, status);
+
+                boolean isRedirect = (status == 301 || status == 302 ||
+                                      status == 303 || status == 307 || status == 308);
+
+                if (!isRedirect) {
+                    // Not a redirect — the server answered directly on HTTP, no HTTPS upgrade
+                    log.info("[SSL] Chain ended at hop {} with status {} (no HTTPS upgrade)", hop, status);
+                    return null;
                 }
-                break; // Not a redirect or no location header
+
+                String location = conn.getHeaderField("Location");
+                if (location == null || location.isBlank()) {
+                    log.warn("[SSL] Redirect with no Location header at hop {}", hop);
+                    return null;
+                }
+
+                // Resolve relative and scheme-relative URLs
+                if (location.startsWith("//")) {
+                    // scheme-relative: //www.google.com/...
+                    location = "https:" + location;
+                } else if (location.startsWith("/")) {
+                    // root-relative: /path/...
+                    URL base = new URL(currentUrl);
+                    location = base.getProtocol() + "://" + base.getHost()
+                            + (base.getPort() != -1 ? ":" + base.getPort() : "")
+                            + location;
+                } else if (!location.startsWith("http")) {
+                    // bare relative: path/to/page
+                    URL base = new URL(currentUrl);
+                    location = base.getProtocol() + "://" + base.getHost() + "/" + location;
+                }
+
+                log.info("[SSL] Following redirect → {}", location);
+
+                if (location.startsWith("https://")) {
+                    return location; // ✅ Found HTTPS
+                }
+
+                currentUrl = location; // Still HTTP, keep following
+
             } catch (Exception e) {
-                log.warn("[SSL] HTTP upgrade check failed for {}: {}", currentUrl, e.getMessage());
-                break;
+                log.warn("[SSL] Redirect chain broken at hop {} for {}: {}", hop, currentUrl, e.getMessage());
+                return null;
             }
         }
+
+        log.warn("[SSL] Exceeded {} redirect hops without reaching HTTPS for {}", MAX_REDIRECTS, rawUrl);
         return null;
     }
+
     private String shortName(String dn) {
         if (dn == null) return "Unknown";
         // Extract CN or O from the X500 distinguished name
