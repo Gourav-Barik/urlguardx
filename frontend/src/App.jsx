@@ -592,7 +592,7 @@ const handleRetry = async () => {
                       <Code className="w-4 h-4 text-cyan-500 mt-0.5" />
                       <div className="overflow-hidden w-full">
                         <span className="text-[10px] font-mono text-slate-500 uppercase block mb-1">Analyzed Vector</span>
-                        <span className="text-sm text-white font-mono truncate block w-full" title={result.canonicalUrl}>{result.canonicalUrl}</span>
+                        <span className="text-sm text-white font-mono truncate block w-full" title={result.resolvedUrl || result.canonicalUrl}>{result.resolvedUrl || result.canonicalUrl}</span>
                       </div>
                     </div>
                     <div className="bg-[#050914] border border-white/5 rounded-lg p-4 flex items-start gap-3">

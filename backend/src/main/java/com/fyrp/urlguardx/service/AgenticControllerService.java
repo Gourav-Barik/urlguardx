@@ -43,13 +43,16 @@ public class AgenticControllerService {
 
         /*
          STEP 1 — LEXICAL ALWAYS RUNS
-         */
-        ModuleResult lexical = lexicalService.analyze(url);
+         Normalize scheme to http:// before ML analysis so https://neverssl.com
+         and http://neverssl.com produce identical model inputs and cache keys.
+        */
+        String lexicalUrl = url.replaceFirst("^https://", "http://");
+        ModuleResult lexical = lexicalService.analyze(lexicalUrl);
 
         /*
          STEP 2 — BLACKLIST ALWAYS RUNS
          (even if ML says danger)
-         */
+        */
         ModuleResult blacklist = blacklistService.check(url);
 
         /*
@@ -141,10 +144,12 @@ public class AgenticControllerService {
                 );
 
         ScanResponse response = new ScanResponse();
-        response.setCanonicalUrl(url);
-        // Normalize resolvedUrl the same way — strips :443, query strings, trailing slashes
+        // resolvedUrl = the true final URL (after HTTPS upgrade, cross-domain redirect,
+        // or HTTP downgrade detection). This is what the Analyzed Vector should display.
         String resolvedUrl = ssl.getResolvedUrl();
-        response.setResolvedUrl(resolvedUrl != null ? normalizeUrl(resolvedUrl) : url);
+        String finalUrl    = resolvedUrl != null ? normalizeUrl(resolvedUrl) : url;
+        response.setCanonicalUrl(url);     // original input (for reference)
+        response.setResolvedUrl(finalUrl); // final effective URL shown in UI
         response.setRiskScore(score);
         response.setStatus(status);
         response.setExplanation(explanation);

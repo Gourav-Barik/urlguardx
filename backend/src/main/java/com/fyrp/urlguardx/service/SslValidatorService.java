@@ -120,6 +120,11 @@ public class SslValidatorService {
             // If http://host → 200 (no HTTPS redirect), the site is HTTP-primary — flag it.
             boolean httpsEnforced = isHttpsEnforced(host);
 
+            // If HTTPS is not enforced, the effective URL is the HTTP version
+            if (!httpsEnforced) {
+                resolvedUrl = "http://" + host;
+            }
+
             String prefix = upgraded ? "[Upgraded to HTTPS] " : "";
 
             ModuleResult r;
@@ -146,6 +151,7 @@ public class SslValidatorService {
                 r = ModuleResult.warning(
                         prefix + "Weak TLS protocol in use: " + proto + ". Upgrade to TLS 1.2+ recommended. " +
                         "Cert issued by: " + shortName(issuer) + ".", 30.0);
+
             } else {
                 r = ModuleResult.clean(
                         prefix + String.format("Valid TLS certificate. Issued by: %s. Expires in %d days. Protocol: %s. HTTPS enforced.",
