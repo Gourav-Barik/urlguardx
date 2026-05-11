@@ -142,9 +142,9 @@ public class AgenticControllerService {
 
         ScanResponse response = new ScanResponse();
         response.setCanonicalUrl(url);
-        // resolvedUrl comes from the SSL module — already computed during validate(), no extra network call
+        // Normalize resolvedUrl the same way — strips :443, query strings, trailing slashes
         String resolvedUrl = ssl.getResolvedUrl();
-        response.setResolvedUrl(resolvedUrl != null ? resolvedUrl : url);
+        response.setResolvedUrl(resolvedUrl != null ? normalizeUrl(resolvedUrl) : url);
         response.setRiskScore(score);
         response.setStatus(status);
         response.setExplanation(explanation);
@@ -200,8 +200,8 @@ public class AgenticControllerService {
             StringBuilder sb = new StringBuilder(scheme).append("://").append(host);
             if (port != -1) sb.append(":").append(port);
             sb.append(path);
-            if (query    != null) sb.append("?").append(query);
-            if (fragment != null) sb.append("#").append(fragment);
+            // Drop query string and fragment — they are not part of the canonical security identity
+            // e.g. https://www.google.com/?gws_rd=ssl → https://www.google.com
 
             return sb.toString();
         } catch (Exception e) {
