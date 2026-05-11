@@ -114,159 +114,89 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
   }
 };
   // --- MAIN SCAN HANDLER (STRICT BACKEND ENFORCEMENT) ---
+  // Core scan logic — accepts URL as parameter so it can be called from
+  // both the form submit handler AND the Re-scan button in history.
+  const runScan = async (targetUrl) => {
+    if (!targetUrl || !targetUrl.trim()) return;
+
+    setAppState('SCANNING');
+    setResult(null);
+    setErrorMsg('');
+    setScanLogs([]);
+
+    await typeLog("[SYSTEM] Initializing security analysis...");
+    await typeLog(`[TARGET] Processing URL: ${targetUrl}`);
+    await typeLog("[AGENT] Allocating analysis pipeline...");
+    try {
+      const response = await fetchWithRetry(`${API_BASE_URL}/api/v1/scan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ url: targetUrl })
+      });
+      if (!response.ok) throw new Error(`Backend HTTP Error: ${response.status}`);
+      const backendData = await response.json();
+
+      await typeLog("[LEXICAL] Running ML structural analysis...");
+      await typeLog(`[LEXICAL] Result: [${backendData.modules.lexical.status.toUpperCase()}]`);
+      await typeLog("[THREAT_INTEL] Checking threat intelligence feeds...");
+      await typeLog(`[THREAT_INTEL] Result: [${backendData.modules.blacklist.status.toUpperCase()}]`);
+
+      if (backendData.modules.blacklist.status === 'Danger') {
+        await typeLog("[AGENT] Confirmed malicious via threat intelligence.");
+        await typeLog("[AGENT] Short-circuiting further analysis.");
+        await typeLog("[DOMAIN] Skipped (blacklist authority).");
+        await typeLog("[SSL] Skipped (blacklist authority).");
+      } else {
+        if (backendData.modules.domain.details?.toLowerCase().includes("golden domain")) {
+          await typeLog("[AGENT] Trusted domain detected.");
+          await typeLog("[DOMAIN] Skipped (golden domain).");
+          await typeLog(`[SSL] Result: [${backendData.modules.ssl.status.toUpperCase()}]`);
+        } else if (targetUrl.startsWith("http://")) {
+          await typeLog("[AGENT] Insecure HTTP detected.");
+          await typeLog(`[SSL] Result: [${backendData.modules.ssl.status.toUpperCase()}]`);
+          await typeLog("[DOMAIN] Running WHOIS analysis...");
+          await typeLog(`[DOMAIN] Result: [${backendData.modules.domain.status.toUpperCase()}]`);
+        } else {
+          await typeLog("[AGENT] Running full domain + SSL validation...");
+          await typeLog("[DOMAIN] Running WHOIS analysis...");
+          await typeLog(`[DOMAIN] Result: [${backendData.modules.domain.status.toUpperCase()}]`);
+          await typeLog(`[SSL] Result: [${backendData.modules.ssl.status.toUpperCase()}]`);
+        }
+      }
+
+      await typeLog("[RISK_ENGINE] Calculating final risk score...");
+      await typeLog(`[SYSTEM] Risk Score: ${backendData.riskScore}/100`);
+      await typeLog("[AI] Generating explanation (Gemini)...");
+      await typeLog("[SYSTEM] Scan complete. Rendering dashboard...");
+
+      formatAndSetResult(backendData);
+      setAppState('COMPLETE');
+    } catch (err) {
+      await typeLog("[SYSTEM] Network instability detected...");
+      await typeLog("[SYSTEM] Retrying silently...");
+      await new Promise(r => setTimeout(r, 1200));
+      await typeLog("[SYSTEM] Unable to complete scan.");
+      setErrorMsg("Scan could not be completed. Please try again.");
+      setAppState('ERROR');
+    }
+  };
+
   const handleScan = async (e) => {
-  e.preventDefault();
-  const trimmedUrl = url.trim();
-  if (!trimmedUrl) return;
-
-  // Client-side domain validation
-  if (!isValidUrl(trimmedUrl)) {
-    setUrlError('Please enter a valid URL with a domain name (e.g. google.com or https://google.com)');
-    return;
-  }
-  setUrlError('');
-
-  setAppState('SCANNING');
-  setResult(null);
-  setErrorMsg('');
-  setScanLogs([]);
-
-  await typeLog("[SYSTEM] Initializing security analysis...");
-  await typeLog(`[TARGET] Processing URL: ${url}`);
-await typeLog("[AGENT] Allocating analysis pipeline...");
-  try {
-
-    const response = await fetchWithRetry(`${API_BASE_URL}/api/v1/scan`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({ url: url })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Backend HTTP Error: ${response.status}`);
+    e.preventDefault();
+    const trimmedUrl = url.trim();
+    if (!trimmedUrl) return;
+    if (!isValidUrl(trimmedUrl)) {
+      setUrlError('Please enter a valid URL with a domain name (e.g. google.com or https://google.com)');
+      return;
     }
+    setUrlError('');
+    await runScan(trimmedUrl);
+  };
 
-    const backendData = await response.json();
-
-    // ─────────────────────────────────────────────
-    // 🔐 STEP 1 — LEXICAL (ALWAYS)
-    // ─────────────────────────────────────────────
-    await typeLog("[LEXICAL] Running ML structural analysis...");
-    await typeLog(
-      `[LEXICAL] Result: [${backendData.modules.lexical.status.toUpperCase()}]`
-    );
-
-    // ─────────────────────────────────────────────
-    // 🌐 STEP 2 — THREAT INTEL (ALWAYS)
-    // ─────────────────────────────────────────────
-    await typeLog("[THREAT_INTEL] Checking threat intelligence feeds...");
-
-    await typeLog(
-      `[THREAT_INTEL] Result: [${backendData.modules.blacklist.status.toUpperCase()}]`
-    );
-
-    // ─────────────────────────────────────────────
-    // 🚨 STEP 3 — BLACKLIST HARD STOP
-    // ─────────────────────────────────────────────
-    if (backendData.modules.blacklist.status === 'Danger') {
-
-      await typeLog("[AGENT] Confirmed malicious via threat intelligence.");
-      await typeLog("[AGENT] Short-circuiting further analysis.");
-
-      await typeLog("[DOMAIN] Skipped (blacklist authority).");
-      await typeLog("[SSL] Skipped (blacklist authority).");
-
-    } else {
-
-      // ─────────────────────────────────────────────
-      // 🌟 GOLDEN DOMAIN CASE
-      // ─────────────────────────────────────────────
-      if (backendData.modules.domain.details?.toLowerCase().includes("golden domain")) {
-
-        await typeLog("[AGENT] Trusted domain detected.");
-        await typeLog("[DOMAIN] Skipped (golden domain).");
-
-        await typeLog(
-          `[SSL] Result: [${backendData.modules.ssl.status.toUpperCase()}]`
-        );
-      }
-
-      // ─────────────────────────────────────────────
-      // 🔴 HTTP CASE
-      // ─────────────────────────────────────────────
-      else if (url.startsWith("http://")) {
-
-        await typeLog("[AGENT] Insecure HTTP detected.");
-
-        await typeLog(
-          `[SSL] Result: [${backendData.modules.ssl.status.toUpperCase()}]`
-        );
-
-        await typeLog("[DOMAIN] Running WHOIS analysis...");
-        await typeLog(
-          `[DOMAIN] Result: [${backendData.modules.domain.status.toUpperCase()}]`
-        );
-      }
-
-      // ─────────────────────────────────────────────
-      // 🧪 FULL SCAN CASE
-      // ─────────────────────────────────────────────
-      else {
-
-        await typeLog("[AGENT] Running full domain + SSL validation...");
-
-        await typeLog("[DOMAIN] Running WHOIS analysis...");
-        await typeLog(
-          `[DOMAIN] Result: [${backendData.modules.domain.status.toUpperCase()}]`
-        );
-
-        await typeLog(
-          `[SSL] Result: [${backendData.modules.ssl.status.toUpperCase()}]`
-        );
-      }
-    }
-
-    // ─────────────────────────────────────────────
-    // 🧠 FINALIZATION
-    // ─────────────────────────────────────────────
-    await typeLog("[RISK_ENGINE] Calculating final risk score...");
-    await typeLog(`[SYSTEM] Risk Score: ${backendData.riskScore}/100`);
-
-    await typeLog("[AI] Generating explanation (Gemini)...");
-    await typeLog("[SYSTEM] Scan complete. Rendering dashboard...");
-
-    formatAndSetResult(backendData);
-    setAppState('COMPLETE');
-
-  } catch (err) {
-
-  await typeLog("[SYSTEM] Network instability detected...");
-  await typeLog("[SYSTEM] Retrying silently...");
-
-  // small delay for realism
-  await new Promise(r => setTimeout(r, 1200));
-
-  await typeLog("[SYSTEM] Unable to complete scan.");
-
-  setErrorMsg("Scan could not be completed. Please try again.");
-
-  setAppState('ERROR');
-}
-};
-const handleRetry = async () => {
-  if (!url.trim()) return;
-
-  setAppState('SCANNING');
-  setErrorMsg('');
-
-  await typeLog("[SYSTEM] Re-initiating scan...");
-
-  await handleScan(new Event("submit"));
-};
-
+  const handleRetry = async () => {
+    if (!url.trim()) return;
+    await runScan(url.trim());
+  };
 
   const formatAndSetResult = (data) => {
     const isDangerous = data.status === "High Risk";
@@ -307,7 +237,7 @@ const handleRetry = async () => {
           status: data.status,
           riskScore: data.riskScore,
           time: getDisplayISTTime(),
-          savedData: data   // full backend response — used by View button to restore without re-scan
+          savedData: { ...data, scanTimeIST: getDisplayISTTime() }  // inject scanTimeIST for View restore
         },
         ...filtered
       ].slice(0, 20);
@@ -324,12 +254,42 @@ const handleRetry = async () => {
     });
   };
 
-  // Restore a previous scan result without re-scanning (preserves API tokens)
-  const restoreResult = (savedData) => {
-    formatAndSetResult(savedData);
+  // Restore a previous scan result WITHOUT re-scanning and WITHOUT moving history.
+  // Also updates the search bar to show the restored URL.
+  const restoreResult = (savedData, itemUrl) => {
+    const isDangerous = savedData.status === "High Risk";
+    const isWarning   = savedData.status === "Suspicious";
+    const theme = isDangerous
+      ? { base: 'rose', hex: '#f43f5e' }
+      : (isWarning ? { base: 'amber', hex: '#f59e0b' } : { base: 'cyan', hex: '#22d3ee' });
+    const mainIcon = isDangerous
+      ? <ShieldAlert className={`w-20 h-20 text-${theme.base}-500 drop-shadow-[0_0_20px_rgba(244,63,94,0.6)]`} />
+      : <ShieldCheck  className={`w-20 h-20 text-${theme.base}-400 drop-shadow-[0_0_20px_rgba(34,211,238,0.6)]`} />;
+    const getModuleIcon = (status) => {
+      if (status === 'Danger')  return <XCircle       className="w-5 h-5 text-rose-500"/>;
+      if (status === 'Warning') return <AlertTriangle  className="w-5 h-5 text-amber-500"/>;
+      if (status === 'Skipped') return <MinusCircle   className="w-5 h-5 text-neutral-500"/>;
+      return <CheckCircle2 className="w-5 h-5 text-cyan-400"/>;
+    };
+    // Update search bar to reflect the restored URL
+    if (itemUrl) setUrl(itemUrl);
+    // Set result — preserve the ORIGINAL scanTimeIST so timestamp doesn't change
+    setResult({
+      ...savedData, theme, icon: mainIcon,
+      scanTimeIST: savedData.scanTimeIST || getDisplayISTTime(),
+      canonicalUrl: savedData.canonicalUrl,
+      resolvedUrl:  savedData.resolvedUrl || null,
+      modules: {
+        lexical:   { ...savedData.modules.lexical,   icon: getModuleIcon(savedData.modules.lexical.status)   },
+        domain:    { ...savedData.modules.domain,     icon: getModuleIcon(savedData.modules.domain.status)    },
+        ssl:       { ...savedData.modules.ssl,        icon: getModuleIcon(savedData.modules.ssl.status)       },
+        blacklist: { ...savedData.modules.blacklist,  icon: getModuleIcon(savedData.modules.blacklist.status) },
+      }
+    });
     setAppState('COMPLETE');
     setScanLogs([]);
     setShowHistory(false);
+    // History is NOT touched — item stays in its original position with original timestamp
   };
 
   return (
@@ -746,7 +706,7 @@ const handleRetry = async () => {
                     <div className="flex items-center gap-2">
                       {item.savedData && (
                         <button 
-                          onClick={() => restoreResult(item.savedData)}
+                          onClick={() => restoreResult(item.savedData, item.url)}
                           className="flex-1 py-2 px-3 flex items-center justify-center gap-2 rounded-lg bg-indigo-950/30 hover:bg-indigo-900/50 text-indigo-400 hover:text-indigo-300 transition-colors border border-indigo-500/20 text-[10px] font-mono uppercase tracking-widest"
                           title="Restore this scan result without re-scanning"
                         >
@@ -758,6 +718,7 @@ const handleRetry = async () => {
                         onClick={() => {
                           setUrl(item.url);
                           setShowHistory(false);
+                          runScan(item.url); // execute immediately, don't just paste URL
                         }}
                         className="flex-1 py-2 px-3 flex items-center justify-center gap-2 rounded-lg bg-cyan-950/30 hover:bg-cyan-900/50 text-cyan-400 hover:text-cyan-300 transition-colors border border-cyan-500/20 text-[10px] font-mono uppercase tracking-widest"
                       >
