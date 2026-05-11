@@ -358,7 +358,7 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                   </button>
                   {/* Tooltip */}
                   <div className="absolute top-full right-0 mt-2 w-max opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
-                    <div className="bg-black/90 border border-white/10 text-slate-300 text-[10px] font-mono px-2 py-1 rounded shadow-lg">
+                    <div className="bg-slate-800 text-white text-xs px-3 py-1.5 rounded-md shadow-lg">
                       View Scan History
                     </div>
                   </div>
@@ -588,7 +588,7 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                             >
                               <ExternalLink className="w-3.5 h-3.5" />
                             </a>
-                            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-[10px] font-mono text-slate-300 bg-slate-900 border border-white/10 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                            <span className="pointer-events-none absolute right-full top-1/2 -translate-y-1/2 mr-2 px-2.5 py-1 text-xs text-white bg-slate-800 rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
                               Open in new tab
                             </span>
                           </div>
