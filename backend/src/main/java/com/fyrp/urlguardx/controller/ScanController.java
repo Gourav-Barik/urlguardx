@@ -50,24 +50,35 @@ public class ScanController {
             url = "https://" + url;
         }
 
-        // ✅ STEP 2 — Validate URL format and require a proper domain (with TLD)
+        // ✅ STEP 2 — Validate URL format: accept proper domains (with letter TLD) OR IPv4 addresses
         try {
             java.net.URL parsed = new java.net.URL(url);
             String host = parsed.getHost();
-            // Reject bare hostnames with no dot (e.g. "google", "localhost")
-            if (host == null || !host.contains(".")) {
-                log.warn("[CONTROLLER] URL has no valid domain/TLD: {}", url);
-                throw new IllegalArgumentException("URL must contain a valid domain name with a TLD (e.g. google.com)");
+
+            if (host == null || host.isEmpty()) {
+                throw new IllegalArgumentException("URL must contain a valid host");
             }
-            // Reject TLDs that are purely numeric (IP-like but malformed)
-            String[] parts = host.split("\\.");
-            String tld = parts[parts.length - 1];
-            if (tld.matches("\\d+")) {
-                log.warn("[CONTROLLER] URL has numeric TLD — not a domain name: {}", url);
-                throw new IllegalArgumentException("URL must contain a valid domain name with a TLD (e.g. google.com)");
+
+            // Check if it's a valid IPv4 address (e.g. 8.8.8.8, 192.168.1.1)
+            boolean isIPv4 = host.matches("(\\d{1,3}\\.){3}\\d{1,3}");
+
+            if (!isIPv4) {
+                // Domain name — must have a dot and a non-numeric TLD
+                if (!host.contains(".")) {
+                    log.warn("[CONTROLLER] Bare hostname with no dot: {}", url);
+                    throw new IllegalArgumentException("URL must contain a valid domain name with a TLD or an IP address");
+                }
+                String[] parts = host.split("\\.");
+                String tld = parts[parts.length - 1];
+                if (tld.matches("\\d+")) {
+                    log.warn("[CONTROLLER] Numeric TLD on non-IP host — malformed: {}", url);
+                    throw new IllegalArgumentException("URL must contain a valid domain name with a TLD or an IP address");
+                }
+            } else {
+                log.info("[CONTROLLER] IPv4 address accepted: {}", host);
             }
         } catch (IllegalArgumentException iae) {
-            throw iae; // re-throw our own validation errors
+            throw iae;
         } catch (Exception e) {
             log.warn("[CONTROLLER] Invalid URL received: {}", url);
             throw new IllegalArgumentException("Invalid URL format");

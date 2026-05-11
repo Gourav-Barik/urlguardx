@@ -18,13 +18,16 @@ export default function App() {
 
   // --- URL VALIDATION ---
   // Accepts: google.com, http://google.com, https://sub.google.co.in/path
-  // Rejects: google, localhost, 123
+  //          192.168.1.1, http://8.8.8.8, https://10.0.0.1/path
+  // Rejects: google, localhost, 123, bare hostnames with no structure
   const isValidUrl = (input) => {
     const trimmed = input.trim();
-    // Strip scheme if present to validate the host part
-    const withoutScheme = trimmed.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
-    // Must contain at least one dot followed by 1+ letters (i.e. a real TLD)
-    return /^[^\s/]+\.[a-zA-Z]{2,}/.test(withoutScheme);
+    const withoutScheme = trimmed.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split('/')[0].split(':')[0];
+    // Accept domain names (must have a letter-TLD)
+    const isDomain = /^[^\s/]+\.[a-zA-Z]{2,}/.test(withoutScheme);
+    // Accept IPv4 addresses (four numeric octets)
+    const isIPv4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(withoutScheme);
+    return isDomain || isIPv4;
   };
 
   // History State
