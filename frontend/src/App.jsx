@@ -402,15 +402,22 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                   disabled={appState === 'SCANNING'}
                   required
                 />
-                <button 
-                  type="submit" 
-                  disabled={appState === 'SCANNING'}
-                  className={`px-8 py-4 font-bold uppercase tracking-widest text-sm transition-all flex items-center gap-3 rounded-xl border border-transparent
-                    ${appState === 'SCANNING' ? 'bg-neutral-900 text-slate-500 cursor-wait' : 'bg-cyan-950/60 text-cyan-400 border-cyan-500/30 hover:bg-cyan-900/80 hover:text-cyan-300 hover:shadow-[0_0_15px_rgba(34,211,238,0.2)]'}`}
-                >
-                  {appState === 'SCANNING' ? 'Analyzing' : 'Execute'}
-                  {appState === 'SCANNING' ? <Activity className="w-5 h-5 animate-spin" /> : <Terminal className="w-5 h-5" />}
-                </button>
+                <div className="relative group/execute">
+                  <button 
+                    type="submit" 
+                    disabled={appState === 'SCANNING'}
+                    className={`px-8 py-4 font-bold uppercase tracking-widest text-sm transition-all flex items-center gap-3 rounded-xl border border-transparent
+                      ${appState === 'SCANNING' ? 'bg-neutral-900 text-slate-500 cursor-wait' : 'bg-cyan-950/60 text-cyan-400 border-cyan-500/30 hover:bg-cyan-900/80 hover:text-cyan-300 hover:shadow-[0_0_15px_rgba(34,211,238,0.2)]'}`}
+                  >
+                    {appState === 'SCANNING' ? 'Analyzing' : 'Execute'}
+                    {appState === 'SCANNING' ? <Activity className="w-5 h-5 animate-spin" /> : <Terminal className="w-5 h-5" />}
+                  </button>
+                  {appState !== 'SCANNING' && (
+                    <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 text-xs text-white bg-slate-800 rounded-md whitespace-nowrap opacity-0 group-hover/execute:opacity-100 transition-opacity z-50 shadow-lg">
+                      Run security scan
+                    </span>
+                  )}
+                </div>
               </div>
             </form>
 
@@ -690,7 +697,7 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                 const riskColor = isDangerous ? 'text-rose-400' : (isWarning ? 'text-amber-400' : 'text-cyan-400');
                 
                 return (
-                  <div key={idx} className="bg-black/40 border border-white/5 rounded-xl p-5 hover:bg-black/60 hover:border-white/10 transition-colors relative group">
+                  <div key={idx} className="bg-black/40 border border-white/5 rounded-xl p-5 hover:bg-black/60 hover:border-white/10 transition-colors relative group/card">
                     <div className="flex justify-between items-start mb-3">
                       <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-sm border ${badgeColor} flex items-center gap-1.5`}>
                         <div className={`w-1.5 h-1.5 rounded-full ${isDangerous ? 'bg-rose-500' : (isWarning ? 'bg-amber-500' : 'bg-cyan-500')}`}></div>
@@ -712,7 +719,7 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                     
                     <div className="flex items-center gap-2">
                         {item.savedData && (
-                          <div className="relative group flex-1">
+                          <div className="relative group/view flex-1">
                             <button 
                               onClick={() => restoreResult(item.savedData, item.url)}
                               className="w-full py-2 px-3 flex items-center justify-center gap-2 rounded-lg bg-indigo-950/30 hover:bg-indigo-900/50 text-indigo-400 hover:text-indigo-300 transition-all border border-indigo-500/20 hover:border-indigo-500/50 text-[10px] font-mono uppercase tracking-widest hover:shadow-[0_0_14px_rgba(99,102,241,0.25)] active:scale-95 hover:scale-[1.02]"
@@ -720,29 +727,39 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                               <Eye className="w-3.5 h-3.5" />
                               View
                             </button>
-                            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-[10px] font-mono text-slate-300 bg-slate-900 border border-white/10 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 text-xs text-white bg-slate-800 rounded-md whitespace-nowrap opacity-0 group-hover/view:opacity-100 transition-opacity z-50 shadow-lg">
                               Restore without re-scanning
                             </span>
                           </div>
                         )}
-                      <button 
-                        onClick={() => {
-                          setUrl(item.url);
-                          setShowHistory(false);
-                          runScan(item.url);
-                        }}
-                        className="flex-1 py-2 px-3 flex items-center justify-center gap-2 rounded-lg bg-cyan-950/30 hover:bg-cyan-900/50 text-cyan-400 hover:text-cyan-300 transition-all border border-cyan-500/20 hover:border-cyan-500/50 text-[10px] font-mono uppercase tracking-widest hover:shadow-[0_0_14px_rgba(34,211,238,0.2)] active:scale-95 hover:scale-[1.02]"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        RE-SCAN
-                      </button>
-                      <button 
-                        onClick={() => deleteHistoryItem(item.url)}
-                        className="py-2 px-4 flex items-center justify-center gap-2 rounded-lg bg-rose-950/30 hover:bg-rose-900/50 text-rose-400 hover:text-rose-300 transition-all border border-rose-500/20 hover:border-rose-500/50 text-[10px] font-mono uppercase tracking-widest hover:shadow-[0_0_14px_rgba(244,63,94,0.25)] active:scale-95 hover:scale-[1.02]"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        DELETE
-                      </button>
+                      <div className="relative group/rescan flex-1">
+                        <button 
+                          onClick={() => {
+                            setUrl(item.url);
+                            setShowHistory(false);
+                            runScan(item.url);
+                          }}
+                          className="w-full py-2 px-3 flex items-center justify-center gap-2 rounded-lg bg-cyan-950/30 hover:bg-cyan-900/50 text-cyan-400 hover:text-cyan-300 transition-all border border-cyan-500/20 hover:border-cyan-500/50 text-[10px] font-mono uppercase tracking-widest hover:shadow-[0_0_14px_rgba(34,211,238,0.2)] active:scale-95 hover:scale-[1.02]"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          RE-SCAN
+                        </button>
+                        <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 text-xs text-white bg-slate-800 rounded-md whitespace-nowrap opacity-0 group-hover/rescan:opacity-100 transition-opacity z-50 shadow-lg">
+                          Re-run full scan
+                        </span>
+                      </div>
+                      <div className="relative group/delete">
+                        <button 
+                          onClick={() => deleteHistoryItem(item.url)}
+                          className="py-2 px-4 flex items-center justify-center gap-2 rounded-lg bg-rose-950/30 hover:bg-rose-900/50 text-rose-400 hover:text-rose-300 transition-all border border-rose-500/20 hover:border-rose-500/50 text-[10px] font-mono uppercase tracking-widest hover:shadow-[0_0_14px_rgba(244,63,94,0.25)] active:scale-95 hover:scale-[1.02]"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          DELETE
+                        </button>
+                        <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 text-xs text-white bg-slate-800 rounded-md whitespace-nowrap opacity-0 group-hover/delete:opacity-100 transition-opacity z-50 shadow-lg">
+                          Remove from history
+                        </span>
+                      </div>
                     </div>
                   </div>
                 );
