@@ -4,7 +4,7 @@ import {
   FileText, Database, Bot, AlertTriangle, CheckCircle2, 
   XCircle, Activity, Terminal, Cpu, Network,
   Server, Zap, Code, MinusCircle, Crosshair, Radar, Fingerprint,
-  Clock, X, Trash2, RefreshCw
+  Clock, X, Trash2, RefreshCw, Eye, ExternalLink
 } from 'lucide-react';
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://urlguardx-backend.onrender.com').replace(/\/$/, '');
 export default function App() {
@@ -296,9 +296,21 @@ const handleRetry = async () => {
       }
     });
 
+    const resolvedDisplayUrl = data.resolvedUrl || data.canonicalUrl || url;
+
     setHistory(prev => {
-      const filtered = prev.filter(item => item.url !== url);
-      const updated = [{ url, status: data.status, riskScore: data.riskScore, time: getDisplayISTTime() }, ...filtered].slice(0, 20);
+      // Deduplicate by resolved URL so http://site.com/ and http://site.com are the same entry
+      const filtered = prev.filter(item => item.url !== resolvedDisplayUrl);
+      const updated = [
+        {
+          url: resolvedDisplayUrl,
+          status: data.status,
+          riskScore: data.riskScore,
+          time: getDisplayISTTime(),
+          savedData: data   // full backend response — used by View button to restore without re-scan
+        },
+        ...filtered
+      ].slice(0, 20);
       localStorage.setItem('urlguardx_history', JSON.stringify(updated));
       return updated;
     });
@@ -310,6 +322,14 @@ const handleRetry = async () => {
       localStorage.setItem('urlguardx_history', JSON.stringify(updated));
       return updated;
     });
+  };
+
+  // Restore a previous scan result without re-scanning (preserves API tokens)
+  const restoreResult = (savedData) => {
+    formatAndSetResult(savedData);
+    setAppState('COMPLETE');
+    setScanLogs([]);
+    setShowHistory(false);
   };
 
   return (
@@ -592,7 +612,20 @@ const handleRetry = async () => {
                       <Code className="w-4 h-4 text-cyan-500 mt-0.5" />
                       <div className="overflow-hidden w-full">
                         <span className="text-[10px] font-mono text-slate-500 uppercase block mb-1">Analyzed Vector</span>
-                        <span className="text-sm text-white font-mono truncate block w-full" title={result.resolvedUrl || result.canonicalUrl}>{result.resolvedUrl || result.canonicalUrl}</span>
+                        <div className="flex items-center gap-2 w-full overflow-hidden">
+                          <span className="text-sm text-white font-mono truncate flex-1" title={result.resolvedUrl || result.canonicalUrl}>
+                            {result.resolvedUrl || result.canonicalUrl}
+                          </span>
+                          <a
+                            href={result.resolvedUrl || result.canonicalUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 p-1 rounded text-slate-500 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
+                            title="Open in new tab"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
                       </div>
                     </div>
                     <div className="bg-[#050914] border border-white/5 rounded-lg p-4 flex items-start gap-3">
@@ -710,7 +743,17 @@ const handleRetry = async () => {
                       {item.time}
                     </div>
                     
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      {item.savedData && (
+                        <button 
+                          onClick={() => restoreResult(item.savedData)}
+                          className="flex-1 py-2 px-3 flex items-center justify-center gap-2 rounded-lg bg-indigo-950/30 hover:bg-indigo-900/50 text-indigo-400 hover:text-indigo-300 transition-colors border border-indigo-500/20 text-[10px] font-mono uppercase tracking-widest"
+                          title="Restore this scan result without re-scanning"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          View
+                        </button>
+                      )}
                       <button 
                         onClick={() => {
                           setUrl(item.url);
