@@ -16,7 +16,7 @@ import java.util.Date;
 public class SslValidatorService {
 
     private static final Logger log = LoggerFactory.getLogger(SslValidatorService.class);
-    private static final int    TIMEOUT_MS = 6_000;
+    private static final int    TIMEOUT_MS = 3_000; // 3s per request — reduces worst-case chain from 36s to ~12s
 
     // ─────────────────────────────────────────────────────────────────────
     //  Main entry point
@@ -42,12 +42,14 @@ public class SslValidatorService {
                 return r;
             }
         } else {
-            // Already HTTPS — check for HTTPS→HTTP downgrade (server redirect back to HTTP)
+            // Already HTTPS — one HEAD+GET pair handles BOTH downgrade and cross-domain detection.
+            // This replaces the old: downgrade-HEAD, downgrade-GET, resolveHttpsRedirect-HEAD (3 calls).
             String firstHop = fetchLocation(rawUrl, "HEAD");
             if (firstHop == null) firstHop = fetchLocation(rawUrl, "GET");
 
             if (firstHop != null && firstHop.startsWith("http://")) {
-                log.warn("[SSL] HTTPS→HTTP server downgrade: {} → {}", rawUrl, firstHop);
+                // HTTPS→HTTP downgrade
+                log.warn("[SSL] HTTPS→HTTP downgrade: {} → {}", rawUrl, firstHop);
                 ModuleResult r = ModuleResult.danger(
                         "HTTPS→HTTP downgrade: server redirects back to plain HTTP. " +
                         "Despite the https:// prefix, data is transmitted in cleartext. " +
@@ -56,14 +58,14 @@ public class SslValidatorService {
                 return r;
             }
 
-            // Check for cross-domain HTTPS→HTTPS redirects (e.g. flipkart.in → flipkart.com)
-            String resolved = resolveHttpsRedirect(rawUrl);
-            if (resolved != null && !resolved.equalsIgnoreCase(rawUrl)) {
-                log.info("[SSL] HTTPS cross-domain redirect: {} → {}", rawUrl, resolved);
-                resolvedUrl = resolved;
-                rawUrl      = resolved;
+            if (firstHop != null && firstHop.startsWith("https://") && !firstHop.equalsIgnoreCase(rawUrl)) {
+                // HTTPS→HTTPS cross-domain redirect (e.g. flipkart.in → flipkart.com)
+                log.info("[SSL] HTTPS cross-domain redirect: {} → {}", rawUrl, firstHop);
+                resolvedUrl = firstHop;
+                rawUrl      = firstHop;
                 upgraded    = true;
             }
+            // firstHop == null means 200 response (Cloudflare CDN, etc.) — proceed to cert check
         }
 
         try {
