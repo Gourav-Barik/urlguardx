@@ -715,7 +715,7 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                           <div className="relative group flex-1">
                             <button 
                               onClick={() => restoreResult(item.savedData, item.url)}
-                              className="w-full py-2 px-3 flex items-center justify-center gap-2 rounded-lg bg-indigo-950/30 hover:bg-indigo-900/50 text-indigo-400 hover:text-indigo-300 transition-colors border border-indigo-500/20 text-[10px] font-mono uppercase tracking-widest"
+                              className="w-full py-2 px-3 flex items-center justify-center gap-2 rounded-lg bg-indigo-950/30 hover:bg-indigo-900/50 text-indigo-400 hover:text-indigo-300 transition-all border border-indigo-500/20 hover:border-indigo-500/50 text-[10px] font-mono uppercase tracking-widest hover:shadow-[0_0_14px_rgba(99,102,241,0.25)] active:scale-95 hover:scale-[1.02]"
                             >
                               <Eye className="w-3.5 h-3.5" />
                               View
@@ -729,16 +729,16 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                         onClick={() => {
                           setUrl(item.url);
                           setShowHistory(false);
-                          runScan(item.url); // execute immediately, don't just paste URL
+                          runScan(item.url);
                         }}
-                        className="flex-1 py-2 px-3 flex items-center justify-center gap-2 rounded-lg bg-cyan-950/30 hover:bg-cyan-900/50 text-cyan-400 hover:text-cyan-300 transition-colors border border-cyan-500/20 text-[10px] font-mono uppercase tracking-widest"
+                        className="flex-1 py-2 px-3 flex items-center justify-center gap-2 rounded-lg bg-cyan-950/30 hover:bg-cyan-900/50 text-cyan-400 hover:text-cyan-300 transition-all border border-cyan-500/20 hover:border-cyan-500/50 text-[10px] font-mono uppercase tracking-widest hover:shadow-[0_0_14px_rgba(34,211,238,0.2)] active:scale-95 hover:scale-[1.02]"
                       >
                         <RefreshCw className="w-3.5 h-3.5" />
                         RE-SCAN
                       </button>
                       <button 
                         onClick={() => deleteHistoryItem(item.url)}
-                        className="py-2 px-4 flex items-center justify-center gap-2 rounded-lg bg-rose-950/30 hover:bg-rose-900/50 text-rose-400 hover:text-rose-300 transition-colors border border-rose-500/20 text-[10px] font-mono uppercase tracking-widest"
+                        className="py-2 px-4 flex items-center justify-center gap-2 rounded-lg bg-rose-950/30 hover:bg-rose-900/50 text-rose-400 hover:text-rose-300 transition-all border border-rose-500/20 hover:border-rose-500/50 text-[10px] font-mono uppercase tracking-widest hover:shadow-[0_0_14px_rgba(244,63,94,0.25)] active:scale-95 hover:scale-[1.02]"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                         DELETE
