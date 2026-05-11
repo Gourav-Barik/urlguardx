@@ -373,7 +373,7 @@ export default function App() {
 
         {/* Advanced Matrix Background */}
         <div className="fixed inset-0 z-0 pointer-events-none">
-          <div className="absolute inset-[-40px] bg-[radial-gradient(#ffffff15_1px,transparent_1px)] [background-size:20px_20px] opacity-40 animate-[gridScroll_1s_linear_infinite]"></div>
+          <div className="absolute -inset-[20px] bg-[radial-gradient(#ffffff15_1px,transparent_1px)] [background-size:20px_20px] opacity-40 animate-grid"></div>
           <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[150px]"></div>
           <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-cyan-900/10 blur-[150px]"></div>
         </div>
@@ -599,8 +599,8 @@ export default function App() {
                   {/* Horizontal color-coded risk bar */}
                   <div className="w-full h-1.5 bg-white/5 rounded-full mb-6 relative overflow-hidden">
                     <div 
-                      className={`absolute top-0 left-0 h-full w-full bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500 transition-all duration-1000 ease-out origin-left`}
-                      style={{ transform: `scaleX(${displayRiskScore / 100})` }}
+                      className={`absolute top-0 left-0 h-full w-full bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500 transition-all duration-1000 ease-out`}
+                      style={{ clipPath: `inset(0 ${100 - displayRiskScore}% 0 0)` }}
                     ></div>
                   </div>
 
