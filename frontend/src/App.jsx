@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-  ShieldAlert, ShieldCheck, Search, Lock, Globe, 
-  FileText, Database, Bot, AlertTriangle, CheckCircle2, 
+import {
+  ShieldAlert, ShieldCheck, Search, Lock, Globe,
+  FileText, Database, Bot, AlertTriangle, CheckCircle2,
   XCircle, Activity, Terminal, Cpu, Network,
   Server, Zap, Code, MinusCircle, Crosshair, Radar, Fingerprint,
-  Clock, X, Trash2, RefreshCw, Eye, ExternalLink
+  Clock, X, Trash2, RefreshCw, Eye, ExternalLink, Copy, Check, Share2
 } from 'lucide-react';
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://urlguardx-backend.onrender.com').replace(/\/$/, '');
 export default function App() {
@@ -14,7 +14,24 @@ export default function App() {
   const [scanLogs, setScanLogs] = useState([]);
   const [errorMsg, setErrorMsg] = useState('');
   const [urlError, setUrlError] = useState('');
+  const [copyCopied, setCopyCopied] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
   const logsEndRef = useRef(null);
+
+  // Keyboard shortcut for executing scan
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        if (url && appState !== 'SCANNING') {
+          // Find and click the hidden submit button or simulate submit
+          const form = document.getElementById('scan-form');
+          if (form) form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [url, appState]);
 
   // --- URL VALIDATION ---
   // Accepts: google.com, http://google.com, https://sub.google.co.in/path
@@ -93,29 +110,29 @@ export default function App() {
       });
       await delay(delayMs);
     }
-    await delay(pauseMs); 
+    await delay(pauseMs);
   };
-const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
-  const fetchWithTimeout = () =>
-    Promise.race([
-      fetch(url, options),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("timeout")), timeout)
-      )
-    ]);
+  const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
+    const fetchWithTimeout = () =>
+      Promise.race([
+        fetch(url, options),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), timeout)
+        )
+      ]);
 
-  try {
-    const res = await fetchWithTimeout();
-    if (!res.ok) throw new Error("HTTP error");
-    return res;
-  } catch (err) {
-    if (retries > 0) {
-      await new Promise(r => setTimeout(r, 700));
-      return fetchWithRetry(url, options, retries - 1, timeout);
+    try {
+      const res = await fetchWithTimeout();
+      if (!res.ok) throw new Error("HTTP error");
+      return res;
+    } catch (err) {
+      if (retries > 0) {
+        await new Promise(r => setTimeout(r, 700));
+        return fetchWithRetry(url, options, retries - 1, timeout);
+      }
+      throw err;
     }
-    throw err;
-  }
-};
+  };
   // --- MAIN SCAN HANDLER (STRICT BACKEND ENFORCEMENT) ---
   // Core scan logic — accepts URL as parameter so it can be called from
   // both the form submit handler AND the Re-scan button in history.
@@ -206,26 +223,26 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
     const isWarning = data.status === "Suspicious";
 
     const theme = isDangerous ? { base: 'rose', hex: '#f43f5e' } : (isWarning ? { base: 'amber', hex: '#f59e0b' } : { base: 'cyan', hex: '#22d3ee' });
-    
-    const mainIcon = isDangerous ? <ShieldAlert className={`w-20 h-20 text-${theme.base}-500 drop-shadow-[0_0_20px_rgba(244,63,94,0.6)]`} /> 
-                                 : <ShieldCheck className={`w-20 h-20 text-${theme.base}-400 drop-shadow-[0_0_20px_rgba(34,211,238,0.6)]`} />;
+
+    const mainIcon = isDangerous ? <ShieldAlert className={`w-20 h-20 text-${theme.base}-500 drop-shadow-[0_0_20px_rgba(244,63,94,0.6)]`} />
+      : <ShieldCheck className={`w-20 h-20 text-${theme.base}-400 drop-shadow-[0_0_20px_rgba(34,211,238,0.6)]`} />;
 
     const getModuleIcon = (status) => {
-      if (status === 'Danger') return <XCircle className="w-5 h-5 text-rose-500"/>;
-      if (status === 'Warning') return <AlertTriangle className="w-5 h-5 text-amber-500"/>;
-      if (status === 'Skipped') return <MinusCircle className="w-5 h-5 text-neutral-500"/>;
-      return <CheckCircle2 className="w-5 h-5 text-cyan-400"/>;
+      if (status === 'Danger') return <XCircle className="w-5 h-5 text-rose-500" />;
+      if (status === 'Warning') return <AlertTriangle className="w-5 h-5 text-amber-500" />;
+      if (status === 'Skipped') return <MinusCircle className="w-5 h-5 text-neutral-500" />;
+      return <CheckCircle2 className="w-5 h-5 text-cyan-400" />;
     };
 
     setResult({
       ...data, theme, icon: mainIcon, scanTimeIST: getDisplayISTTime(),
       canonicalUrl: data.canonicalUrl || url,
-      resolvedUrl:  data.resolvedUrl  || null,
+      resolvedUrl: data.resolvedUrl || null,
       modules: {
-        lexical:   { ...data.modules.lexical,   icon: getModuleIcon(data.modules.lexical.status)   },
-        domain:    { ...data.modules.domain,     icon: getModuleIcon(data.modules.domain.status)    },
-        ssl:       { ...data.modules.ssl,        icon: getModuleIcon(data.modules.ssl.status)       },
-        blacklist: { ...data.modules.blacklist,  icon: getModuleIcon(data.modules.blacklist.status) },
+        lexical: { ...data.modules.lexical, icon: getModuleIcon(data.modules.lexical.status) },
+        domain: { ...data.modules.domain, icon: getModuleIcon(data.modules.domain.status) },
+        ssl: { ...data.modules.ssl, icon: getModuleIcon(data.modules.ssl.status) },
+        blacklist: { ...data.modules.blacklist, icon: getModuleIcon(data.modules.blacklist.status) },
       }
     });
 
@@ -261,18 +278,18 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
   // Also updates the search bar to show the restored URL.
   const restoreResult = (savedData, itemUrl) => {
     const isDangerous = savedData.status === "High Risk";
-    const isWarning   = savedData.status === "Suspicious";
+    const isWarning = savedData.status === "Suspicious";
     const theme = isDangerous
       ? { base: 'rose', hex: '#f43f5e' }
       : (isWarning ? { base: 'amber', hex: '#f59e0b' } : { base: 'cyan', hex: '#22d3ee' });
     const mainIcon = isDangerous
       ? <ShieldAlert className={`w-20 h-20 text-${theme.base}-500 drop-shadow-[0_0_20px_rgba(244,63,94,0.6)]`} />
-      : <ShieldCheck  className={`w-20 h-20 text-${theme.base}-400 drop-shadow-[0_0_20px_rgba(34,211,238,0.6)]`} />;
+      : <ShieldCheck className={`w-20 h-20 text-${theme.base}-400 drop-shadow-[0_0_20px_rgba(34,211,238,0.6)]`} />;
     const getModuleIcon = (status) => {
-      if (status === 'Danger')  return <XCircle       className="w-5 h-5 text-rose-500"/>;
-      if (status === 'Warning') return <AlertTriangle  className="w-5 h-5 text-amber-500"/>;
-      if (status === 'Skipped') return <MinusCircle   className="w-5 h-5 text-neutral-500"/>;
-      return <CheckCircle2 className="w-5 h-5 text-cyan-400"/>;
+      if (status === 'Danger') return <XCircle className="w-5 h-5 text-rose-500" />;
+      if (status === 'Warning') return <AlertTriangle className="w-5 h-5 text-amber-500" />;
+      if (status === 'Skipped') return <MinusCircle className="w-5 h-5 text-neutral-500" />;
+      return <CheckCircle2 className="w-5 h-5 text-cyan-400" />;
     };
     // Update search bar to reflect the restored URL
     if (itemUrl) setUrl(itemUrl);
@@ -281,18 +298,33 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
       ...savedData, theme, icon: mainIcon,
       scanTimeIST: savedData.scanTimeIST || getDisplayISTTime(),
       canonicalUrl: savedData.canonicalUrl,
-      resolvedUrl:  savedData.resolvedUrl || null,
+      resolvedUrl: savedData.resolvedUrl || null,
       modules: {
-        lexical:   { ...savedData.modules.lexical,   icon: getModuleIcon(savedData.modules.lexical.status)   },
-        domain:    { ...savedData.modules.domain,     icon: getModuleIcon(savedData.modules.domain.status)    },
-        ssl:       { ...savedData.modules.ssl,        icon: getModuleIcon(savedData.modules.ssl.status)       },
-        blacklist: { ...savedData.modules.blacklist,  icon: getModuleIcon(savedData.modules.blacklist.status) },
+        lexical: { ...savedData.modules.lexical, icon: getModuleIcon(savedData.modules.lexical.status) },
+        domain: { ...savedData.modules.domain, icon: getModuleIcon(savedData.modules.domain.status) },
+        ssl: { ...savedData.modules.ssl, icon: getModuleIcon(savedData.modules.ssl.status) },
+        blacklist: { ...savedData.modules.blacklist, icon: getModuleIcon(savedData.modules.blacklist.status) },
       }
     });
     setAppState('COMPLETE');
     setScanLogs([]);
     setShowHistory(false);
     // History is NOT touched — item stays in its original position with original timestamp
+    // History is NOT touched — item stays in its original position with original timestamp
+  };
+
+  const handleCopy = () => {
+    const textToCopy = result.resolvedUrl || result.canonicalUrl;
+    navigator.clipboard.writeText(textToCopy);
+    setCopyCopied(true);
+    setTimeout(() => setCopyCopied(false), 2000);
+  };
+
+  const handleShare = () => {
+    const textToShare = `URLGuardX Analysis: ${result.resolvedUrl || result.canonicalUrl}\nStatus: ${result.status}\nRisk Score: ${result.riskScore}/100\n\nExplainable Threat Detection at your fingertips.`;
+    navigator.clipboard.writeText(textToShare);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2000);
   };
 
   return (
@@ -312,10 +344,10 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
       `}</style>
 
       <div className="min-h-screen bg-neutral-950 text-slate-300 font-sans selection:bg-cyan-500/30 overflow-x-hidden relative flex flex-col">
-        
+
         {/* Advanced Matrix Background */}
         <div className="fixed inset-0 z-0 pointer-events-none">
-          <div className="absolute inset-0 bg-[radial-gradient(#ffffff10_1px,transparent_1px)] [background-size:20px_20px] opacity-40"></div>
+          <div className="absolute -inset-[20px] bg-[radial-gradient(#ffffff10_1px,transparent_1px)] [background-size:20px_20px] opacity-40 animate-grid"></div>
           <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[150px]"></div>
           <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-cyan-900/10 blur-[150px]"></div>
         </div>
@@ -335,7 +367,7 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                   <span className="text-[10px] font-mono text-cyan-500/70 tracking-[0.2em] uppercase">ADVANCED THREAT MONITOR</span>
                 </div>
               </div>
-              
+
               <div className="flex items-center gap-3">
                 {/* SYSTEM / NODE status block */}
                 <div className="hidden md:flex items-center gap-3 font-mono text-xs border border-white/10 bg-black/40 px-4 h-9 rounded-md shadow-inner">
@@ -370,7 +402,7 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
 
         {/* Main Interface Content */}
         <main className="relative z-10 flex-grow flex flex-col items-center justify-start pt-12 pb-20 px-4 sm:px-6 lg:px-8 w-full max-w-7xl mx-auto">
-          
+
           {/* SEARCH CONSOLE */}
           <div className={`w-full max-w-4xl transition-all duration-700 ease-in-out ${appState !== 'IDLE' ? 'mb-8 scale-95 opacity-90' : 'mt-20 mb-0 scale-100 opacity-100'}`}>
             {appState === 'IDLE' && (
@@ -378,7 +410,7 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                 <div className="inline-flex items-center justify-center p-3 mb-6 rounded-full bg-cyan-950/30 border border-cyan-500/20">
                   <Radar className="w-6 h-6 text-cyan-400 animate-[spin_4s_linear_infinite]" />
                 </div>
-                <h2 className="text-5xl font-black text-white mb-6 tracking-tight drop-shadow-lg">
+                <h2 className="text-5xl font-black bg-gradient-to-r from-cyan-400 to-indigo-400 bg-clip-text text-transparent mb-6 tracking-tight drop-shadow-lg">
                   Explainable Phishing URL Detection
                 </h2>
                 <p className="text-slate-400 text-lg max-w-3xl mx-auto font-light leading-relaxed">
@@ -387,24 +419,24 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
               </div>
             )}
 
-            <form onSubmit={handleScan} className="relative group w-full">
+            <form id="scan-form" onSubmit={handleScan} className="relative group w-full">
               <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500/40 via-indigo-500/40 to-cyan-500/40 rounded-xl blur-md opacity-50 group-hover:opacity-100 transition duration-500 group-hover:duration-200 animate-pulse"></div>
-              <div className="relative flex items-center w-full bg-[#050914] border border-cyan-900/50 rounded-2xl shadow-2xl p-2">
+              <div className="relative flex items-center w-full bg-[#050914] border border-cyan-900/50 focus-within:border-cyan-500/80 focus-within:shadow-[0_0_20px_rgba(34,211,238,0.2)] transition-all duration-300 rounded-2xl shadow-2xl p-2">
                 <div className="pl-4 pr-3 text-cyan-500">
                   <Crosshair className="w-6 h-6 opacity-70" />
                 </div>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={url}
                   onChange={(e) => { setUrl(e.target.value); if (urlError) setUrlError(''); }}
-                  placeholder="Enter target URI vector (e.g., https://secure-login.com)"
+                  placeholder="Enter target URL vector (e.g., https://example.com)"
                   className={`w-full py-4 pr-4 bg-transparent border-none focus:outline-none text-white text-lg font-mono placeholder-slate-600 ${urlError ? 'text-rose-300' : ''}`}
                   disabled={appState === 'SCANNING'}
                   required
                 />
                 <div className="relative group/execute">
-                  <button 
-                    type="submit" 
+                  <button
+                    type="submit"
                     disabled={appState === 'SCANNING'}
                     className={`px-8 py-4 font-bold uppercase tracking-widest text-sm transition-all flex items-center gap-3 rounded-xl border border-transparent
                       ${appState === 'SCANNING' ? 'bg-neutral-900 text-slate-500 cursor-wait' : 'bg-cyan-950/60 text-cyan-400 border-cyan-500/30 hover:bg-cyan-900/80 hover:text-cyan-300 hover:shadow-[0_0_15px_rgba(34,211,238,0.2)]'}`}
@@ -421,6 +453,12 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
               </div>
             </form>
 
+            {appState === 'IDLE' && (
+              <div className="mt-6 text-center text-[10px] text-slate-500 font-mono tracking-widest uppercase animate-in fade-in duration-700 delay-300 fill-mode-both">
+                Press <kbd className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-slate-400 mx-1">⌘/Ctrl + Enter</kbd> to execute
+              </div>
+            )}
+
             {/* Inline URL validation error */}
             {urlError && (
               <div className="flex items-center gap-3 mt-3 px-4 py-3 rounded-xl bg-rose-500/10 border border-rose-500/25 animate-in fade-in slide-in-from-top-2 duration-300">
@@ -428,12 +466,12 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                 <span className="text-rose-300 text-sm font-mono">{urlError}</span>
               </div>
             )}
-            
+
             {appState === 'IDLE' && (
               <div className="flex justify-center gap-10 mt-8 text-xs font-mono text-cyan-300 opacity-70">
-                <div className="flex items-center gap-2"><Fingerprint className="w-4 h-4"/> FEATURE-BASED ML ENGINE</div>
-                <div className="flex items-center gap-2"><Network className="w-4 h-4"/> AGENTIC SCAN CONTROLLER</div>
-                <div className="flex items-center gap-2"><Zap className="w-4 h-4"/> REAL-TIME THREAT FEEDS</div>
+                <div className="flex items-center gap-2"><Fingerprint className="w-4 h-4" /> FEATURE-BASED ML ENGINE</div>
+                <div className="flex items-center gap-2"><Network className="w-4 h-4" /> AGENTIC SCAN CONTROLLER</div>
+                <div className="flex items-center gap-2"><Zap className="w-4 h-4" /> REAL-TIME THREAT FEEDS</div>
               </div>
             )}
           </div>
@@ -457,7 +495,7 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                   if (log.text.includes('Match:') || log.text.includes('Danger') || log.text.includes('ERROR') || log.text.includes('FATAL')) textColor = 'text-rose-400';
                   if (log.text.includes('Safe') || log.text.includes('Clean')) textColor = 'text-emerald-400';
                   if (log.text.includes('bypassed') || log.text.includes('Short-circuiting')) textColor = 'text-slate-500 italic';
-                  
+
                   return (
                     <div key={index} className="flex gap-4 min-w-max hover:bg-white/5 px-2 py-0.5 rounded transition-colors">
                       <span className="text-slate-600 shrink-0 select-none">[{log.time}]</span>
@@ -467,7 +505,7 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                 })}
                 <div ref={logsEndRef} className="pt-2 pl-2">
                   {appState === 'SCANNING' && (
-                  <span className="inline-block w-2 h-4 bg-cyan-500 animate-pulse"></span>
+                    <span className="inline-block w-2 h-4 bg-cyan-500 animate-pulse"></span>
                   )}
                 </div>
               </div>
@@ -480,22 +518,22 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
               <AlertTriangle className="w-8 h-8 text-rose-500 shrink-0" />
               <div>
                 <h3 className='text-rose-400 font-bold'>SCAN UNAVAILABLE</h3>
-                
+
                 <p className='text-rose-200'>We couldn’t analyze this URL right now. Please retry in a moment.</p>
-                
+
                 <div className="flex gap-2 mt-4">
-                <button 
-                  onClick={() => handleRetry()}
-                  className="mt-4 px-4 py-2 bg-rose-950/50 hover:bg-rose-900/50 text-rose-200 text-xs font-mono rounded border border-rose-500/20 transition-colors">
-                  
-                  RETRY SCAN
-                </button>
-                
-                <button 
-                  onClick={() => setAppState('IDLE')}
-                  className="mt-4 px-4 py-2 bg-rose-950/50 hover:bg-rose-900/50 text-rose-200 text-xs font-mono rounded border border-rose-500/20 transition-colors">
-                  EDIT URL
-                </button>
+                  <button
+                    onClick={() => handleRetry()}
+                    className="mt-4 px-4 py-2 bg-rose-950/50 hover:bg-rose-900/50 text-rose-200 text-xs font-mono rounded border border-rose-500/20 transition-colors">
+
+                    RETRY SCAN
+                  </button>
+
+                  <button
+                    onClick={() => setAppState('IDLE')}
+                    className="mt-4 px-4 py-2 bg-rose-950/50 hover:bg-rose-900/50 text-rose-200 text-xs font-mono rounded border border-rose-500/20 transition-colors">
+                    EDIT URL
+                  </button>
                 </div>
               </div>
             </div>
@@ -504,30 +542,30 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
           {/* BENTO DASHBOARD RESULTS */}
           {appState === 'COMPLETE' && result && (
             <div className="w-full animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out space-y-6">
-              
+
               {/* TOP ROW: Score & Synthesis */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
+
                 {/* Threat Confidence Card */}
                 <div className={`glass-panel rounded-2xl p-6 border-t-4 border-t-${result.theme.base}-500 flex flex-col items-center justify-between relative overflow-hidden group`}>
                   <div className={`absolute inset-0 bg-gradient-to-b from-${result.theme.base}-500/10 to-transparent opacity-50`}></div>
-                  
+
                   <div className="w-full flex justify-between items-center relative z-10 mb-4">
                     <h2 className="text-xs font-mono text-slate-400 uppercase tracking-widest">Confidence Index</h2>
                     <span className="text-[10px] font-mono text-slate-600">MEM:0x8F2</span>
                   </div>
-                  
+
                   <div className="relative flex-grow flex items-center justify-center py-6 z-10">
                     <svg className="w-48 h-48 transform -rotate-90 overflow-visible">
                       <circle cx="96" cy="96" r="80" fill="transparent" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
-                      <circle 
-                        cx="96" cy="96" r="80" 
-                        fill="transparent" 
-                        stroke={result.theme.hex} 
-                        strokeWidth="12" 
-                        strokeDasharray="502" 
-                        strokeDashoffset={502 - (502 * (result.riskScore || 0)) / 100} 
-                        className="transition-all duration-1500 ease-out drop-shadow-[0_0_12px_currentColor]" 
+                      <circle
+                        cx="96" cy="96" r="80"
+                        fill="transparent"
+                        stroke={result.theme.hex}
+                        strokeWidth="12"
+                        strokeDasharray="502"
+                        strokeDashoffset={502 - (502 * (result.riskScore || 0)) / 100}
+                        className="transition-all duration-1500 ease-out drop-shadow-[0_0_12px_currentColor]"
                         strokeLinecap="round"
                       />
                     </svg>
@@ -537,7 +575,7 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                       </span>
                     </div>
                   </div>
-                  
+
                   <div className={`w-full bg-black/40 rounded-lg p-4 flex items-center gap-4 border border-${result.theme.base}-500/20 relative z-10`}>
                     <div className="bg-black/50 p-2 rounded-lg border border-white/5">
                       {result.icon}
@@ -558,7 +596,7 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                       <path d="M10,10 L30,10 L30,15 L15,15 L15,30 L10,30 Z M90,10 L90,30 L85,30 L85,15 L70,15 L70,10 Z M90,90 L70,90 L70,85 L85,85 L85,70 L90,70 Z M10,90 L10,70 L15,70 L15,85 L30,85 L30,90 Z" />
                     </svg>
                   </div>
-                  
+
                   <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/10">
                     <div className="flex items-center gap-4">
                       <div className="p-3 bg-indigo-500/10 rounded-xl border border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.2)]">
@@ -576,7 +614,7 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                       {result.explanation}
                     </p>
                   </div>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-auto">
                     <div className="bg-[#050914] border border-white/5 rounded-lg p-4 flex items-start gap-3">
                       <Code className="w-4 h-4 text-cyan-500 mt-0.5" />
@@ -586,7 +624,35 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                           <span className="text-sm text-white font-mono truncate flex-1 min-w-0" title={result.resolvedUrl || result.canonicalUrl}>
                             {result.resolvedUrl || result.canonicalUrl}
                           </span>
-                          <div className="relative group shrink-0">
+                          
+                          {/* Copy Button */}
+                          <div className="relative group/copy shrink-0">
+                            <button
+                              onClick={handleCopy}
+                              className="p-1 rounded text-slate-500 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors flex"
+                            >
+                              {copyCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                            </button>
+                            <span className="pointer-events-none absolute right-full top-1/2 -translate-y-1/2 mr-2 px-2.5 py-1 text-xs text-white bg-slate-800 rounded-md whitespace-nowrap opacity-0 group-hover/copy:opacity-100 transition-opacity z-50 shadow-lg">
+                              {copyCopied ? "Copied!" : "Copy to clipboard"}
+                            </span>
+                          </div>
+
+                          {/* Share Button */}
+                          <div className="relative group/share shrink-0">
+                            <button
+                              onClick={handleShare}
+                              className="p-1 rounded text-slate-500 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors flex"
+                            >
+                              {shareCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5" />}
+                            </button>
+                            <span className="pointer-events-none absolute right-full top-1/2 -translate-y-1/2 mr-2 px-2.5 py-1 text-xs text-white bg-slate-800 rounded-md whitespace-nowrap opacity-0 group-hover/share:opacity-100 transition-opacity z-50 shadow-lg">
+                              {shareCopied ? "Summary copied!" : "Share result"}
+                            </span>
+                          </div>
+
+                          {/* Open New Tab Button */}
+                          <div className="relative group/ext shrink-0">
                             <a
                               href={result.resolvedUrl || result.canonicalUrl}
                               target="_blank"
@@ -595,7 +661,7 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                             >
                               <ExternalLink className="w-3.5 h-3.5" />
                             </a>
-                            <span className="pointer-events-none absolute right-full top-1/2 -translate-y-1/2 mr-2 px-2.5 py-1 text-xs text-white bg-slate-800 rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+                            <span className="pointer-events-none absolute right-full top-1/2 -translate-y-1/2 mr-2 px-2.5 py-1 text-xs text-white bg-slate-800 rounded-md whitespace-nowrap opacity-0 group-hover/ext:opacity-100 transition-opacity z-50 shadow-lg">
                               Open in new tab
                             </span>
                           </div>
@@ -619,35 +685,35 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
               {/* BOTTOM ROW: Subsystem Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {[
-                  { key: 'lexical', title: 'Lexical Char-CNN', icon: FileText, color: 'indigo' },
-                  { key: 'domain', title: 'WHOIS Registry', icon: Globe, color: 'teal' },
-                  { key: 'ssl', title: 'TLS Validation', icon: Lock, color: 'emerald' },
-                  { key: 'blacklist', title: 'Threat Intel', icon: Database, color: 'orange' }
+                  { key: 'lexical', title: 'Lexical Char-CNN', icon: FileText, color: 'indigo', delay: 'delay-100' },
+                  { key: 'domain', title: 'WHOIS Registry', icon: Globe, color: 'teal', delay: 'delay-200' },
+                  { key: 'ssl', title: 'TLS Validation', icon: Lock, color: 'emerald', delay: 'delay-300' },
+                  { key: 'blacklist', title: 'Threat Intel', icon: Database, color: 'orange', delay: 'delay-500' }
                 ].map((mod) => {
                   const modData = result.modules[mod.key];
                   const isSkipped = modData.status === 'Skipped';
                   const isBad = modData.status === 'Danger' || modData.status === 'Warning';
-                  
+
                   return (
-                    <div key={mod.key} className={`glass-panel rounded-xl p-6 transition-all relative overflow-hidden group hover:-translate-y-1 hover:shadow-2xl hover:shadow-${mod.color}-500/10 ${isSkipped ? 'opacity-60 grayscale-[50%]' : ''}`}>
+                    <div key={mod.key} className={`glass-panel rounded-xl p-6 transition-all relative overflow-hidden group hover:-translate-y-1 hover:shadow-2xl hover:shadow-${mod.color}-500/10 animate-in fade-in slide-in-from-bottom-6 duration-700 fill-mode-both ${mod.delay} ${isSkipped ? 'opacity-60 grayscale-[50%]' : ''}`}>
                       <div className="absolute top-4 right-4">
-                         <span className={`text-[9px] font-bold font-mono px-2 py-1 rounded-sm uppercase tracking-widest
-                          ${modData.status === 'Clean' ? 'bg-cyan-950 text-cyan-400 border border-cyan-500/30' : 
-                            (modData.status === 'Warning' ? 'bg-amber-950 text-amber-400 border border-amber-500/30' : 
-                            (modData.status === 'Danger' ? 'bg-rose-950 text-rose-400 border border-rose-500/30' : 'bg-black text-slate-500 border border-slate-800'))}`}>
+                        <span className={`text-[9px] font-bold font-mono px-2 py-1 rounded-sm uppercase tracking-widest
+                          ${modData.status === 'Clean' ? 'bg-cyan-950 text-cyan-400 border border-cyan-500/30' :
+                            (modData.status === 'Warning' ? 'bg-amber-950 text-amber-400 border border-amber-500/30' :
+                              (modData.status === 'Danger' ? 'bg-rose-950 text-rose-400 border border-rose-500/30' : 'bg-black text-slate-500 border border-slate-800'))}`}>
                           {modData.status}
                         </span>
                       </div>
 
                       <div className="flex flex-col gap-4 relative z-10">
                         <div className={`p-3 w-max rounded-lg bg-${isSkipped ? 'neutral' : mod.color}-500/10 border border-${isSkipped ? 'neutral' : mod.color}-500/20`}>
-                           <mod.icon className={`w-5 h-5 text-${isSkipped ? 'slate-500' : mod.color + '-400'}`} />
+                          <mod.icon className={`w-5 h-5 text-${isSkipped ? 'slate-500' : mod.color + '-400'}`} />
                         </div>
-                        
+
                         <div>
                           <h3 className={`font-bold text-sm mb-2 ${isSkipped ? 'text-slate-500' : 'text-white'}`}>{mod.title}</h3>
                           <div className={`text-xs leading-relaxed font-light ${isSkipped ? 'text-slate-600 italic' : 'text-slate-400'}`}>
-                            {modData.status === "Skipped"? "Skipped by agentic decision": modData.details}
+                            {modData.status === "Skipped" ? "Skipped by agentic decision" : modData.details}
                           </div>
                         </div>
                       </div>
@@ -661,7 +727,7 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
         </main>
 
         {/* HISTORY DRAWER */}
-        <div 
+        <div
           className={`fixed inset-y-0 right-0 z-50 w-full sm:w-[450px] bg-[#050914] border-l border-white/5 shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col ${showHistory ? 'translate-x-0' : 'translate-x-full'}`}
         >
           {/* Header */}
@@ -681,13 +747,17 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
               </button>
             </div>
           </div>
-          
+
           {/* List */}
           <div className="flex-grow overflow-y-auto p-4 space-y-4">
             {history.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-60">
-                <Database className="w-12 h-12 mb-4 text-slate-600" />
-                <p className="font-mono text-xs uppercase tracking-widest">No Records Found</p>
+                <div className="relative mb-6">
+                  <Database className="w-16 h-16 text-slate-700" />
+                  <Search className="w-8 h-8 text-cyan-500/50 absolute -bottom-2 -right-2" />
+                </div>
+                <h4 className="text-white font-medium mb-1">History is empty</h4>
+                <p className="font-mono text-[10px] uppercase tracking-widest text-center">Scan targets to build<br/>your local threat database</p>
               </div>
             ) : (
               history.map((item, idx) => {
@@ -696,6 +766,15 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                 const badgeColor = isDangerous ? 'bg-rose-950 text-rose-400 border-rose-500/30' : (isWarning ? 'bg-amber-950 text-amber-400 border-amber-500/30' : 'bg-cyan-950 text-cyan-400 border-cyan-500/30');
                 const riskColor = isDangerous ? 'text-rose-400' : (isWarning ? 'text-amber-400' : 'text-cyan-400');
                 
+                // Extract domain for favicon
+                let domain = "";
+                try {
+                  domain = new URL(item.url).hostname;
+                } catch {
+                  domain = item.url.replace(/^https?:\/\//i, '').split('/')[0];
+                }
+
+
                 return (
                   <div key={idx} className="bg-black/40 border border-white/5 rounded-xl p-5 hover:bg-black/60 hover:border-white/10 transition-colors relative group/card">
                     <div className="flex justify-between items-start mb-3">
@@ -707,33 +786,38 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                         RISK <span className={`text-base font-bold ${riskColor}`}>{item.riskScore}</span> /100
                       </div>
                     </div>
-                    
-                    <div className="text-sm font-mono text-white mb-3 truncate w-full" title={item.url}>
-                      {item.url}
+
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-6 h-6 shrink-0 bg-slate-800 rounded-full overflow-hidden flex items-center justify-center p-1 border border-white/10">
+                        <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} alt="favicon" className="w-full h-full object-contain" onError={(e) => e.target.style.display = 'none'} />
+                      </div>
+                      <div className="text-sm font-mono text-white truncate w-full" title={item.url}>
+                        {item.url}
+                      </div>
                     </div>
-                    
+
                     <div className="flex items-center gap-2 text-xs font-mono text-slate-500 mb-5">
                       <Clock className="w-3.5 h-3.5" />
                       {item.time}
                     </div>
-                    
+
                     <div className="flex items-center gap-2">
-                        {item.savedData && (
-                          <div className="relative group/view flex-1">
-                            <button 
-                              onClick={() => restoreResult(item.savedData, item.url)}
-                              className="w-full py-2 px-3 flex items-center justify-center gap-2 rounded-lg bg-indigo-950/30 hover:bg-indigo-900/50 text-indigo-400 hover:text-indigo-300 transition-all border border-indigo-500/20 hover:border-indigo-500/50 text-[10px] font-mono uppercase tracking-widest hover:shadow-[0_0_14px_rgba(99,102,241,0.25)] active:scale-95 hover:scale-[1.02]"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              View
-                            </button>
-                            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 text-xs text-white bg-slate-800 rounded-md whitespace-nowrap opacity-0 group-hover/view:opacity-100 transition-opacity z-50 shadow-lg">
-                              Restore without re-scanning
-                            </span>
-                          </div>
-                        )}
+                      {item.savedData && (
+                        <div className="relative group/view flex-1">
+                          <button
+                            onClick={() => restoreResult(item.savedData, item.url)}
+                            className="w-full py-2 px-3 flex items-center justify-center gap-2 rounded-lg bg-indigo-950/30 hover:bg-indigo-900/50 text-indigo-400 hover:text-indigo-300 transition-all border border-indigo-500/20 hover:border-indigo-500/50 text-[10px] font-mono uppercase tracking-widest hover:shadow-[0_0_14px_rgba(99,102,241,0.25)] active:scale-95 hover:scale-[1.02]"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            View
+                          </button>
+                          <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 text-xs text-white bg-slate-800 rounded-md whitespace-nowrap opacity-0 group-hover/view:opacity-100 transition-opacity z-50 shadow-lg">
+                            Restore without re-scanning
+                          </span>
+                        </div>
+                      )}
                       <div className="relative group/rescan flex-1">
-                        <button 
+                        <button
                           onClick={() => {
                             setUrl(item.url);
                             setShowHistory(false);
@@ -749,7 +833,7 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                         </span>
                       </div>
                       <div className="relative group/delete">
-                        <button 
+                        <button
                           onClick={() => deleteHistoryItem(item.url)}
                           className="py-2 px-4 flex items-center justify-center gap-2 rounded-lg bg-rose-950/30 hover:bg-rose-900/50 text-rose-400 hover:text-rose-300 transition-all border border-rose-500/20 hover:border-rose-500/50 text-[10px] font-mono uppercase tracking-widest hover:shadow-[0_0_14px_rgba(244,63,94,0.25)] active:scale-95 hover:scale-[1.02]"
                         >
@@ -766,7 +850,7 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
               })
             )}
           </div>
-          
+
           {/* Footer */}
           <div className="p-4 border-t border-white/5 bg-black/40 text-center">
             <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">
@@ -774,11 +858,11 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
             </p>
           </div>
         </div>
-        
+
         {/* Backdrop overlay */}
         {showHistory && (
-          <div 
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-in fade-in duration-300" 
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-in fade-in duration-300"
             onClick={() => setShowHistory(false)}
           ></div>
         )}
