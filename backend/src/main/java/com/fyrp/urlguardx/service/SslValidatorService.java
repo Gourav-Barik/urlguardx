@@ -9,8 +9,11 @@ import javax.net.ssl.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.cert.Certificate;
+import java.security.cert.CertificateParsingException;
 import java.security.cert.X509Certificate;
+import java.util.Collection;
 import java.util.Date;
+import java.util.List;
 
 @Service
 public class SslValidatorService {
@@ -27,13 +30,32 @@ public class SslValidatorService {
         String  resolvedUrl = rawUrl;
 
         if (!rawUrl.startsWith("https://")) {
-            // HTTP — follow redirect chain to find HTTPS
+            String ipHost;
+            try { ipHost = new URL(rawUrl).getHost(); } catch (Exception e) { ipHost = ""; }
+            boolean isIpHost = ipHost.matches("(\\d{1,3}\\.){3}\\d{1,3}");
+
+            // Follow HTTP redirect chain first (works for 1.1.1.1 → https://one.one.one.one)
             String httpsUrl = resolveHttpsUpgrade(rawUrl);
             if (httpsUrl != null) {
                 log.info("[SSL] Upgraded {} → {}", rawUrl, httpsUrl);
                 resolvedUrl = httpsUrl;
                 rawUrl      = httpsUrl;
                 upgraded    = true;
+            } else if (isIpHost) {
+                // Port 80 didn't redirect (may be blocked). Try https://IP:443 with
+                // hostname check disabled to read the cert domain (e.g. 8.8.8.8 → dns.google).
+                String certDomain = readCertDomainForIp(ipHost);
+                if (certDomain != null) {
+                    log.info("[SSL] IP {} cert domain: {}", ipHost, certDomain);
+                    resolvedUrl = "https://" + certDomain;
+                    rawUrl      = resolvedUrl;
+                    upgraded    = true;
+                } else {
+                    ModuleResult r = ModuleResult.danger(
+                            "No TLS — IP address does not serve HTTPS or connection refused.", 70.0);
+                    r.setResolvedUrl(rawUrl);
+                    return r;
+                }
             } else {
                 ModuleResult r = ModuleResult.danger(
                         "No TLS — URL uses plain HTTP. Data transmitted in cleartext; " +
@@ -182,6 +204,8 @@ public class SslValidatorService {
      * google.com   → http://google.com   returns 301 → https://... → true (enforced) → Clean
      */
     private boolean isHttpsEnforced(String host) {
+        // IPs: already validated via cert-domain path; skip redundant HTTP check
+        if (host.matches("(\\d{1,3}\\.){3}\\d{1,3}")) return true;
         String httpUrl = "http://" + host;
         try {
             String loc = fetchLocation(httpUrl, "HEAD");
@@ -191,8 +215,69 @@ public class SslValidatorService {
             return enforced;
         } catch (Exception e) {
             log.warn("[SSL] Enforcement check failed for {}: {}", host, e.getMessage());
-            return true; // assume enforced on error — avoid false positives
+            return true;
         }
+    }
+
+    /**
+     * Connect to an IPv4 address on port 443 with hostname verification DISABLED,
+     * read the TLS certificate, and return the first non-wildcard DNS SAN.
+     * Used as fallback when http://IP redirect detection fails (e.g. port 80 blocked).
+     */
+    private String readCertDomainForIp(String ipHost) {
+        try {
+            SSLContext ctx = SSLContext.getInstance("TLS");
+            ctx.init(null, new TrustManager[]{ new X509TrustManager() {
+                public void checkClientTrusted(X509Certificate[] c, String a) {}
+                public void checkServerTrusted(X509Certificate[] c, String a) {}
+                public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+            }}, null);
+            SSLSocketFactory factory = ctx.getSocketFactory();
+
+            java.net.Socket underlying = new java.net.Socket();
+            underlying.connect(new java.net.InetSocketAddress(ipHost, 443), TIMEOUT_MS);
+            SSLSocket socket = (SSLSocket) factory.createSocket(underlying, ipHost, 443, true);
+            socket.setSoTimeout(TIMEOUT_MS);
+            // No endpoint identification algorithm — intentionally skip hostname check for IPs
+            socket.startHandshake();
+
+            Certificate[] chain = socket.getSession().getPeerCertificates();
+            socket.close();
+
+            if (chain == null || chain.length == 0) return null;
+            return extractDomainFromCert((X509Certificate) chain[0]);
+        } catch (Exception e) {
+            log.warn("[SSL] IP cert read failed for {}:443 — {}", ipHost, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Extract the best hostname from a cert's Subject Alternative Names (SAN).
+     * Returns the first non-wildcard DNS SAN; falls back to CN from subject DN.
+     */
+    private String extractDomainFromCert(X509Certificate cert) {
+        try {
+            Collection<List<?>> sans = cert.getSubjectAlternativeNames();
+            if (sans != null) {
+                String wildcard = null;
+                for (List<?> san : sans) {
+                    if (san.size() >= 2 && Integer.valueOf(2).equals(san.get(0))) {
+                        String dns = String.valueOf(san.get(1));
+                        if (!dns.startsWith("*")) return dns;
+                        if (wildcard == null) wildcard = dns.substring(2); // strip *.
+                    }
+                }
+                if (wildcard != null) return wildcard;
+            }
+        } catch (CertificateParsingException e) {
+            log.warn("[SSL] SAN parse error: {}", e.getMessage());
+        }
+        for (String part : cert.getSubjectX500Principal().getName().split(",")) {
+            String t = part.trim();
+            if (t.startsWith("CN=")) return t.substring(3);
+        }
+        return null;
     }
 
     /**

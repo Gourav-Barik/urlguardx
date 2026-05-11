@@ -58,6 +58,15 @@ public class DomainAnalyzerService {
         // Remove www.
         String domain = host.startsWith("www.") ? host.substring(4) : host;
 
+        // For IPv4 addresses, domain heuristics (dot count, digit count, TLD analysis)
+        // are not meaningful — they are designed for domain names, not IP addresses.
+        // The SSL module resolves the cert domain (dns.google, one.one.one.one, etc.).
+        if (domain.matches("(\\d{1,3}\\.){3}\\d{1,3}")) {
+            return ModuleResult.clean(
+                    "IPv4 address — domain registry analysis not applicable. " +
+                    "IP-to-domain resolution and TLS certificate validation determine trust.", 5.0);
+        }
+
         // Fast-path: Golden Domain
         if (GOLDEN_DOMAINS.stream().anyMatch(g -> domain.equalsIgnoreCase(g) || domain.endsWith("." + g))) {
             return ModuleResult.clean(
