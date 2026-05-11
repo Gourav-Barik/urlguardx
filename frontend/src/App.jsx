@@ -351,7 +351,7 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                 <div className="relative group">
                   <button
                     onClick={() => setShowHistory(true)}
-                    className="flex items-center gap-2 font-mono text-xs border border-white/10 bg-black/40 px-4 h-9 rounded-md shadow-inner text-cyan-400 border-cyan-500/20 transition-colors duration-200 hover:bg-black/60"
+                    className="flex items-center gap-2 font-mono text-xs border border-white/10 bg-black/40 px-4 h-9 rounded-md shadow-inner text-cyan-400 border-cyan-500/20 transition-all duration-200 hover:bg-black/60 hover:border-cyan-500/50 hover:text-cyan-300 hover:shadow-[0_0_14px_rgba(34,211,238,0.2)] active:scale-95"
                   >
                     <Clock className="w-3.5 h-3.5" />
                     <span className="tracking-widest uppercase">History</span>
@@ -575,8 +575,8 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                       <Code className="w-4 h-4 text-cyan-500 mt-0.5" />
                       <div className="overflow-hidden w-full">
                         <span className="text-[10px] font-mono text-slate-500 uppercase block mb-1">Analyzed Vector</span>
-                        <div className="flex items-center gap-2 w-full overflow-hidden">
-                          <span className="text-sm text-white font-mono truncate flex-1" title={result.resolvedUrl || result.canonicalUrl}>
+                        <div className="flex items-center gap-2 w-full">
+                          <span className="text-sm text-white font-mono truncate flex-1 min-w-0" title={result.resolvedUrl || result.canonicalUrl}>
                             {result.resolvedUrl || result.canonicalUrl}
                           </span>
                           <div className="relative group shrink-0">
