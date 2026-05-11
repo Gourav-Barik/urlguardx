@@ -223,25 +223,34 @@ public class SslValidatorService {
     // ─────────────────────────────────────────────────────────────────────
 
     /**
-     * Returns true if http://host redirects to an HTTPS URL (HTTPS is enforced).
-     * neverssl.com → http://neverssl.com returns 200 → false (not enforced) → Danger
-     * google.com   → http://google.com   returns 301 → https://... → true (enforced) → Clean
+     * Returns true if http://host redirects to HTTPS (HTTPS is enforced).
+     *
+     * Three outcomes:
+     *   - 3xx → https://...  : enforced = true   (google.com, one.one.one.one)
+     *   - 2xx / 3xx → http:/ : enforced = false  (neverssl.com, eu.httpbin.org)
+     *   - Exception (DNS fail, timeout): enforced = true  (exotic TLDs like .google — avoid false DANGER)
      */
     private boolean isHttpsEnforced(String host) {
-        // IPs: already validated via cert-domain path; skip redundant HTTP check
-        if (host.matches("(\\d{1,3}\\.){3}\\d{1,3}")) return true;
-        String httpUrl = "http://" + host;
+        if (host.matches("(\\d{1,3}\\.){3}\\d{1,3}")) return true; // IPs handled via cert-domain path
         try {
-            String loc = fetchLocation(httpUrl, "HEAD");
-            if (loc == null) loc = fetchLocation(httpUrl, "GET");
-            // null means the host is unreachable or returned non-redirect (could be DNS failure);
-            // default to enforced to avoid false DANGER on exotic TLDs (e.g. .google)
-            if (loc == null) return true;
-            boolean enforced = loc.startsWith("https://");
-            log.info("[SSL] HTTPS enforcement for {}: {}", host, enforced ? "YES" : "NO");
+            HttpURLConnection conn = (HttpURLConnection) new URL("http://" + host).openConnection();
+            conn.setInstanceFollowRedirects(false);
+            conn.setConnectTimeout(TIMEOUT_MS);
+            conn.setReadTimeout(TIMEOUT_MS);
+            conn.setRequestMethod("HEAD");
+            conn.setRequestProperty("User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36");
+            int status = conn.getResponseCode(); // throws on actual network failure
+            String loc  = conn.getHeaderField("Location");
+            boolean isRedirect = (status == 301 || status == 302 || status == 303
+                                  || status == 307 || status == 308);
+            boolean enforced = isRedirect && loc != null && loc.startsWith("https://");
+            log.info("[SSL] HTTPS enforcement for {} (HTTP {}): {}", host, status, enforced ? "YES" : "NO");
             return enforced;
         } catch (Exception e) {
-            log.warn("[SSL] Enforcement check failed for {}: {}", host, e.getMessage());
+            // Connection failed (DNS resolution error, timeout, firewall) —
+            // assume enforced to avoid false DANGER on valid-but-unreachable TLDs.
+            log.warn("[SSL] Enforcement check unreachable for {} — assuming enforced: {}", host, e.getMessage());
             return true;
         }
     }
