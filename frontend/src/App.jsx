@@ -16,6 +16,7 @@ export default function App() {
   const [urlError, setUrlError] = useState('');
   const [copyCopied, setCopyCopied] = useState(false);
   const [displayRiskScore, setDisplayRiskScore] = useState(0);
+  const [textRiskScore, setTextRiskScore] = useState(0);
   const logsEndRef = useRef(null);
 
   // Keyboard shortcut for executing scan
@@ -317,8 +318,29 @@ export default function App() {
   useEffect(() => {
     if (result) {
       setDisplayRiskScore(0);
+      setTextRiskScore(0);
       const timer = setTimeout(() => {
         setDisplayRiskScore(result.riskScore);
+        
+        let current = 0;
+        const target = result.riskScore;
+        if (target === 0) return;
+        
+        const duration = 1000; // Match CSS duration
+        const intervalTime = 20;
+        const steps = duration / intervalTime;
+        const stepValue = target / steps;
+        
+        const counter = setInterval(() => {
+          current += stepValue;
+          if (current >= target) {
+            setTextRiskScore(target);
+            clearInterval(counter);
+          } else {
+            setTextRiskScore(Math.floor(current));
+          }
+        }, intervalTime);
+        
       }, 50);
       return () => clearTimeout(timer);
     }
@@ -351,7 +373,7 @@ export default function App() {
 
         {/* Advanced Matrix Background */}
         <div className="fixed inset-0 z-0 pointer-events-none">
-          <div className="absolute -inset-[20px] bg-[radial-gradient(#ffffff10_1px,transparent_1px)] [background-size:20px_20px] opacity-40 animate-grid"></div>
+          <div className="absolute inset-[-40px] bg-[radial-gradient(#ffffff15_1px,transparent_1px)] [background-size:20px_20px] opacity-40 animate-[gridScroll_1s_linear_infinite]"></div>
           <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[150px]"></div>
           <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-cyan-900/10 blur-[150px]"></div>
         </div>
@@ -569,16 +591,16 @@ export default function App() {
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
                       <span className={`text-6xl font-black text-white tracking-tighter drop-shadow-[0_0_15px_${result.theme.hex}]`}>
-                        {displayRiskScore}
+                        {textRiskScore}
                       </span>
                     </div>
                   </div>
 
                   {/* Horizontal color-coded risk bar */}
-                  <div className="w-full h-1.5 bg-white/5 rounded-full mb-6 overflow-hidden relative">
+                  <div className="w-full h-1.5 bg-white/5 rounded-full mb-6 relative overflow-hidden">
                     <div 
-                      className={`absolute top-0 left-0 h-full bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500 transition-all duration-1000 ease-out`}
-                      style={{ width: `${displayRiskScore}%` }}
+                      className={`absolute top-0 left-0 h-full w-full bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500 transition-all duration-1000 ease-out origin-left`}
+                      style={{ transform: `scaleX(${displayRiskScore / 100})` }}
                     ></div>
                   </div>
 
