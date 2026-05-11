@@ -72,11 +72,18 @@ public class SslValidatorService {
 
             // Step 3: Follow one HTTPS→HTTPS cross-domain hop on the resolved domain
             // (e.g. https://dns.google → https://dns.google.com, or https://one.one.one.one stays)
+            // Strip path — we only want scheme+host (avoids https://one.one.one.one/dns artifacts)
             String crossHop = fetchLocation(rawUrl, "HEAD");
             if (crossHop == null) crossHop = fetchLocation(rawUrl, "GET");
-            if (crossHop != null && crossHop.startsWith("https://") && !crossHop.equalsIgnoreCase(rawUrl)) {
-                log.info("[SSL] IP resolved HTTPS cross-domain: {} → {}", rawUrl, crossHop);
-                rawUrl = crossHop;
+            if (crossHop != null && crossHop.startsWith("https://")) {
+                try {
+                    String crossHost = new URL(crossHop).getHost();
+                    String crossOrigin = "https://" + crossHost;
+                    if (!crossHost.isEmpty() && !crossOrigin.equalsIgnoreCase(rawUrl)) {
+                        log.info("[SSL] IP resolved HTTPS cross-domain: {} → {}", rawUrl, crossOrigin);
+                        rawUrl = crossOrigin;
+                    }
+                } catch (Exception ignored) {}
             }
 
             resolvedUrl = rawUrl;
