@@ -178,7 +178,11 @@ public class AgenticControllerService {
     private String normalizeUrl(String raw) {
         raw = raw.trim();
         if (!raw.startsWith("http://") && !raw.startsWith("https://")) {
-            raw = "https://" + raw;
+            // Bare IPs default to http:// so the SSL module follows the redirect chain.
+            // Bare domains default to https://.
+            String hostPart = raw.split("/")[0].split(":")[0];
+            boolean isBareIp = hostPart.matches("(\\d{1,3}\\.){3}\\d{1,3}");
+            raw = (isBareIp ? "http://" : "https://") + raw;
         }
         try {
             java.net.URL parsed = new java.net.URL(raw);

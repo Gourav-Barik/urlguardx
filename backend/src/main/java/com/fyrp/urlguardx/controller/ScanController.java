@@ -46,8 +46,12 @@ public class ScanController {
         log.info("[CONTROLLER] Scan request received for: {}", url);
 
         // ✅ STEP 1 — Normalize URL
+        // Bare IPs default to http:// (browser behavior) so the SSL module can follow
+        // redirect chains (e.g. 8.8.8.8 → https://dns.google/).
+        // Bare domains default to https://.
         if (!url.startsWith("http")) {
-            url = "https://" + url;
+            boolean isBareIp = url.split("/")[0].split(":")[0].matches("(\\d{1,3}\\.){3}\\d{1,3}");
+            url = (isBareIp ? "http://" : "https://") + url;
         }
 
         // ✅ STEP 2 — Validate URL format: accept proper domains (with letter TLD) OR IPv4 addresses
