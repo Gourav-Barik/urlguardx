@@ -15,7 +15,7 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState('');
   const [urlError, setUrlError] = useState('');
   const [copyCopied, setCopyCopied] = useState(false);
-  const [shareCopied, setShareCopied] = useState(false);
+  const [displayRiskScore, setDisplayRiskScore] = useState(0);
   const logsEndRef = useRef(null);
 
   // Keyboard shortcut for executing scan
@@ -313,18 +313,22 @@ export default function App() {
     // History is NOT touched — item stays in its original position with original timestamp
   };
 
+  // Animate risk score ring when result changes
+  useEffect(() => {
+    if (result) {
+      setDisplayRiskScore(0);
+      const timer = setTimeout(() => {
+        setDisplayRiskScore(result.riskScore);
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [result]);
+
   const handleCopy = () => {
     const textToCopy = result.resolvedUrl || result.canonicalUrl;
     navigator.clipboard.writeText(textToCopy);
     setCopyCopied(true);
     setTimeout(() => setCopyCopied(false), 2000);
-  };
-
-  const handleShare = () => {
-    const textToShare = `URLGuardX Analysis: ${result.resolvedUrl || result.canonicalUrl}\nStatus: ${result.status}\nRisk Score: ${result.riskScore}/100\n\nExplainable Threat Detection at your fingertips.`;
-    navigator.clipboard.writeText(textToShare);
-    setShareCopied(true);
-    setTimeout(() => setShareCopied(false), 2000);
   };
 
   return (
@@ -420,7 +424,7 @@ export default function App() {
             )}
 
             <form id="scan-form" onSubmit={handleScan} className="relative group w-full">
-              <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500/40 via-indigo-500/40 to-cyan-500/40 rounded-xl blur-md opacity-50 group-hover:opacity-100 transition duration-500 group-hover:duration-200 animate-pulse"></div>
+              <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500/40 via-indigo-500/40 to-cyan-500/40 rounded-xl blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-0 group-hover:duration-500 animate-pulse"></div>
               <div className="relative flex items-center w-full bg-[#050914] border border-cyan-900/50 focus-within:border-cyan-500/80 focus-within:shadow-[0_0_20px_rgba(34,211,238,0.2)] transition-all duration-300 rounded-2xl shadow-2xl p-2">
                 <div className="pl-4 pr-3 text-cyan-500">
                   <Crosshair className="w-6 h-6 opacity-70" />
@@ -452,12 +456,6 @@ export default function App() {
                 </div>
               </div>
             </form>
-
-            {appState === 'IDLE' && (
-              <div className="mt-6 text-center text-[10px] text-slate-500 font-mono tracking-widest uppercase animate-in fade-in duration-700 delay-300 fill-mode-both">
-                Press <kbd className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-slate-400 mx-1">⌘/Ctrl + Enter</kbd> to execute
-              </div>
-            )}
 
             {/* Inline URL validation error */}
             {urlError && (
@@ -564,16 +562,24 @@ export default function App() {
                         stroke={result.theme.hex}
                         strokeWidth="12"
                         strokeDasharray="502"
-                        strokeDashoffset={502 - (502 * (result.riskScore || 0)) / 100}
-                        className="transition-all duration-1500 ease-out drop-shadow-[0_0_12px_currentColor]"
+                        strokeDashoffset={502 - (502 * displayRiskScore) / 100}
+                        className="transition-all duration-1000 ease-out drop-shadow-[0_0_12px_currentColor]"
                         strokeLinecap="round"
                       />
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
                       <span className={`text-6xl font-black text-white tracking-tighter drop-shadow-[0_0_15px_${result.theme.hex}]`}>
-                        {result.riskScore}
+                        {displayRiskScore}
                       </span>
                     </div>
+                  </div>
+
+                  {/* Horizontal color-coded risk bar */}
+                  <div className="w-full h-1.5 bg-white/5 rounded-full mb-6 overflow-hidden relative">
+                    <div 
+                      className={`absolute top-0 left-0 h-full bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500 transition-all duration-1000 ease-out`}
+                      style={{ width: `${displayRiskScore}%` }}
+                    ></div>
                   </div>
 
                   <div className={`w-full bg-black/40 rounded-lg p-4 flex items-center gap-4 border border-${result.theme.base}-500/20 relative z-10`}>
@@ -638,19 +644,6 @@ export default function App() {
                             </span>
                           </div>
 
-                          {/* Share Button */}
-                          <div className="relative group/share shrink-0">
-                            <button
-                              onClick={handleShare}
-                              className="p-1 rounded text-slate-500 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors flex"
-                            >
-                              {shareCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5" />}
-                            </button>
-                            <span className="pointer-events-none absolute right-full top-1/2 -translate-y-1/2 mr-2 px-2.5 py-1 text-xs text-white bg-slate-800 rounded-md whitespace-nowrap opacity-0 group-hover/share:opacity-100 transition-opacity z-50 shadow-lg">
-                              {shareCopied ? "Summary copied!" : "Share result"}
-                            </span>
-                          </div>
-
                           {/* Open New Tab Button */}
                           <div className="relative group/ext shrink-0">
                             <a
@@ -685,17 +678,17 @@ export default function App() {
               {/* BOTTOM ROW: Subsystem Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {[
-                  { key: 'lexical', title: 'Lexical Char-CNN', icon: FileText, color: 'indigo', delay: 'delay-100' },
-                  { key: 'domain', title: 'WHOIS Registry', icon: Globe, color: 'teal', delay: 'delay-200' },
-                  { key: 'ssl', title: 'TLS Validation', icon: Lock, color: 'emerald', delay: 'delay-300' },
-                  { key: 'blacklist', title: 'Threat Intel', icon: Database, color: 'orange', delay: 'delay-500' }
+                  { key: 'lexical', title: 'Lexical Char-CNN', icon: FileText, color: 'indigo', delay: '0ms' },
+                  { key: 'domain', title: 'WHOIS Registry', icon: Globe, color: 'teal', delay: '100ms' },
+                  { key: 'ssl', title: 'TLS Validation', icon: Lock, color: 'emerald', delay: '200ms' },
+                  { key: 'blacklist', title: 'Threat Intel', icon: Database, color: 'orange', delay: '300ms' }
                 ].map((mod) => {
                   const modData = result.modules[mod.key];
                   const isSkipped = modData.status === 'Skipped';
                   const isBad = modData.status === 'Danger' || modData.status === 'Warning';
 
                   return (
-                    <div key={mod.key} className={`glass-panel rounded-xl p-6 transition-all relative overflow-hidden group hover:-translate-y-1 hover:shadow-2xl hover:shadow-${mod.color}-500/10 animate-in fade-in slide-in-from-bottom-6 duration-700 fill-mode-both ${mod.delay} ${isSkipped ? 'opacity-60 grayscale-[50%]' : ''}`}>
+                    <div key={mod.key} style={{ animationDelay: mod.delay }} className={`glass-panel rounded-xl p-6 transition-all relative overflow-hidden group hover:-translate-y-1 hover:shadow-2xl hover:shadow-${mod.color}-500/10 animate-fade-in-up ${isSkipped ? 'opacity-60 grayscale-[50%]' : ''}`}>
                       <div className="absolute top-4 right-4">
                         <span className={`text-[9px] font-bold font-mono px-2 py-1 rounded-sm uppercase tracking-widest
                           ${modData.status === 'Clean' ? 'bg-cyan-950 text-cyan-400 border border-cyan-500/30' :
@@ -766,15 +759,6 @@ export default function App() {
                 const badgeColor = isDangerous ? 'bg-rose-950 text-rose-400 border-rose-500/30' : (isWarning ? 'bg-amber-950 text-amber-400 border-amber-500/30' : 'bg-cyan-950 text-cyan-400 border-cyan-500/30');
                 const riskColor = isDangerous ? 'text-rose-400' : (isWarning ? 'text-amber-400' : 'text-cyan-400');
                 
-                // Extract domain for favicon
-                let domain = "";
-                try {
-                  domain = new URL(item.url).hostname;
-                } catch {
-                  domain = item.url.replace(/^https?:\/\//i, '').split('/')[0];
-                }
-
-
                 return (
                   <div key={idx} className="bg-black/40 border border-white/5 rounded-xl p-5 hover:bg-black/60 hover:border-white/10 transition-colors relative group/card">
                     <div className="flex justify-between items-start mb-3">
@@ -787,13 +771,8 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-6 h-6 shrink-0 bg-slate-800 rounded-full overflow-hidden flex items-center justify-center p-1 border border-white/10">
-                        <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} alt="favicon" className="w-full h-full object-contain" onError={(e) => e.target.style.display = 'none'} />
-                      </div>
-                      <div className="text-sm font-mono text-white truncate w-full" title={item.url}>
-                        {item.url}
-                      </div>
+                    <div className="text-sm font-mono text-white mb-3 truncate w-full" title={item.url}>
+                      {item.url}
                     </div>
 
                     <div className="flex items-center gap-2 text-xs font-mono text-slate-500 mb-5">
