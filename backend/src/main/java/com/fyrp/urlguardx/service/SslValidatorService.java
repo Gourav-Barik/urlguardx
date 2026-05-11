@@ -34,22 +34,28 @@ public class SslValidatorService {
             try { ipHost = new URL(rawUrl).getHost(); } catch (Exception e) { ipHost = ""; }
             boolean isIpHost = ipHost.matches("(\\d{1,3}\\.){3}\\d{1,3}");
 
-            // Follow HTTP redirect chain first (works for 1.1.1.1 → https://one.one.one.one)
+            // Step 1: Follow HTTP redirect chain
             String httpsUrl = resolveHttpsUpgrade(rawUrl);
+
             if (httpsUrl != null) {
                 log.info("[SSL] Upgraded {} → {}", rawUrl, httpsUrl);
-                resolvedUrl = httpsUrl;
-                rawUrl      = httpsUrl;
-                upgraded    = true;
+                rawUrl  = httpsUrl;
+                upgraded = true;
+                // Step 2a: If redirect landed on https://IP (e.g. https://1.1.1.1),
+                // read the cert SAN to get the real domain (one.one.one.one).
+                String upgradedHost;
+                try { upgradedHost = new URL(rawUrl).getHost(); } catch (Exception e) { upgradedHost = ""; }
+                if (upgradedHost.matches("(\\d{1,3}\\.){3}\\d{1,3}")) {
+                    String certDomain = readCertDomainForIp(upgradedHost);
+                    if (certDomain != null) { rawUrl = "https://" + certDomain; }
+                }
             } else if (isIpHost) {
-                // Port 80 didn't redirect (may be blocked). Try https://IP:443 with
-                // hostname check disabled to read the cert domain (e.g. 8.8.8.8 → dns.google).
+                // Step 2b: Port 80 didn't redirect — connect to https://IP:443 directly.
                 String certDomain = readCertDomainForIp(ipHost);
                 if (certDomain != null) {
                     log.info("[SSL] IP {} cert domain: {}", ipHost, certDomain);
-                    resolvedUrl = "https://" + certDomain;
-                    rawUrl      = resolvedUrl;
-                    upgraded    = true;
+                    rawUrl  = "https://" + certDomain;
+                    upgraded = true;
                 } else {
                     ModuleResult r = ModuleResult.danger(
                             "No TLS — IP address does not serve HTTPS or connection refused.", 70.0);
@@ -63,6 +69,17 @@ public class SslValidatorService {
                 r.setResolvedUrl(rawUrl);
                 return r;
             }
+
+            // Step 3: Follow one HTTPS→HTTPS cross-domain hop on the resolved domain
+            // (e.g. https://dns.google → https://dns.google.com, or https://one.one.one.one stays)
+            String crossHop = fetchLocation(rawUrl, "HEAD");
+            if (crossHop == null) crossHop = fetchLocation(rawUrl, "GET");
+            if (crossHop != null && crossHop.startsWith("https://") && !crossHop.equalsIgnoreCase(rawUrl)) {
+                log.info("[SSL] IP resolved HTTPS cross-domain: {} → {}", rawUrl, crossHop);
+                rawUrl = crossHop;
+            }
+
+            resolvedUrl = rawUrl;
         } else {
             // Already HTTPS — one HEAD+GET pair handles BOTH downgrade and cross-domain detection.
             // This replaces the old: downgrade-HEAD, downgrade-GET, resolveHttpsRedirect-HEAD (3 calls).
@@ -210,7 +227,10 @@ public class SslValidatorService {
         try {
             String loc = fetchLocation(httpUrl, "HEAD");
             if (loc == null) loc = fetchLocation(httpUrl, "GET");
-            boolean enforced = loc != null && loc.startsWith("https://");
+            // null means the host is unreachable or returned non-redirect (could be DNS failure);
+            // default to enforced to avoid false DANGER on exotic TLDs (e.g. .google)
+            if (loc == null) return true;
+            boolean enforced = loc.startsWith("https://");
             log.info("[SSL] HTTPS enforcement for {}: {}", host, enforced ? "YES" : "NO");
             return enforced;
         } catch (Exception e) {
