@@ -579,15 +579,19 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                           <span className="text-sm text-white font-mono truncate flex-1" title={result.resolvedUrl || result.canonicalUrl}>
                             {result.resolvedUrl || result.canonicalUrl}
                           </span>
-                          <a
-                            href={result.resolvedUrl || result.canonicalUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="shrink-0 p-1 rounded text-slate-500 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
-                            title="Open in new tab"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
+                          <div className="relative group shrink-0">
+                            <a
+                              href={result.resolvedUrl || result.canonicalUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1 rounded text-slate-500 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors flex"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-[10px] font-mono text-slate-300 bg-slate-900 border border-white/10 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                              Open in new tab
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -707,16 +711,20 @@ const fetchWithRetry = async (url, options, retries = 2, timeout = 30000) => {
                     </div>
                     
                     <div className="flex items-center gap-2">
-                      {item.savedData && (
-                        <button 
-                          onClick={() => restoreResult(item.savedData, item.url)}
-                          className="flex-1 py-2 px-3 flex items-center justify-center gap-2 rounded-lg bg-indigo-950/30 hover:bg-indigo-900/50 text-indigo-400 hover:text-indigo-300 transition-colors border border-indigo-500/20 text-[10px] font-mono uppercase tracking-widest"
-                          title="Restore this scan result without re-scanning"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          View
-                        </button>
-                      )}
+                        {item.savedData && (
+                          <div className="relative group flex-1">
+                            <button 
+                              onClick={() => restoreResult(item.savedData, item.url)}
+                              className="w-full py-2 px-3 flex items-center justify-center gap-2 rounded-lg bg-indigo-950/30 hover:bg-indigo-900/50 text-indigo-400 hover:text-indigo-300 transition-colors border border-indigo-500/20 text-[10px] font-mono uppercase tracking-widest"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              View
+                            </button>
+                            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-[10px] font-mono text-slate-300 bg-slate-900 border border-white/10 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                              Restore without re-scanning
+                            </span>
+                          </div>
+                        )}
                       <button 
                         onClick={() => {
                           setUrl(item.url);
