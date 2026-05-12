@@ -232,24 +232,28 @@ public class SslValidatorService {
      */
     private boolean isHttpsEnforced(String host) {
         if (host.matches("(\\d{1,3}\\.){3}\\d{1,3}")) return true; // IPs handled via cert-domain path
+        String currentUrl = "http://" + host;
         try {
-            HttpURLConnection conn = (HttpURLConnection) new URL("http://" + host).openConnection();
-            conn.setInstanceFollowRedirects(false);
-            conn.setConnectTimeout(TIMEOUT_MS);
-            conn.setReadTimeout(TIMEOUT_MS);
-            conn.setRequestMethod("HEAD");
-            conn.setRequestProperty("User-Agent",
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36");
-            int status = conn.getResponseCode(); // throws on actual network failure
-            String loc  = conn.getHeaderField("Location");
-            boolean isRedirect = (status == 301 || status == 302 || status == 303
-                                  || status == 307 || status == 308);
-            boolean enforced = isRedirect && loc != null && loc.startsWith("https://");
-            log.info("[SSL] HTTPS enforcement for {} (HTTP {}): {}", host, status, enforced ? "YES" : "NO");
-            return enforced;
+            for (int i = 0; i < 5; i++) {
+                String loc = fetchLocationWithThrow(currentUrl, "HEAD");
+                if (loc == null) {
+                    loc = fetchLocationWithThrow(currentUrl, "GET");
+                }
+                
+                if (loc == null) {
+                    // No redirect. Ended on HTTP.
+                    log.info("[SSL] HTTPS enforcement for {}: NO (ended at {})", host, currentUrl);
+                    return false;
+                }
+                
+                if (loc.startsWith("https://")) {
+                    log.info("[SSL] HTTPS enforcement for {}: YES", host);
+                    return true;
+                }
+                currentUrl = loc;
+            }
+            return false;
         } catch (Exception e) {
-            // Connection failed (DNS resolution error, timeout, firewall) —
-            // assume enforced to avoid false DANGER on valid-but-unreachable TLDs.
             log.warn("[SSL] Enforcement check unreachable for {} — assuming enforced: {}", host, e.getMessage());
             return true;
         }
@@ -398,41 +402,45 @@ public class SslValidatorService {
      */
     private String fetchLocation(String url, String method) {
         try {
-            HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
-            conn.setInstanceFollowRedirects(false);
-            conn.setConnectTimeout(TIMEOUT_MS);
-            conn.setReadTimeout(TIMEOUT_MS);
-            conn.setRequestMethod(method);
-            conn.setRequestProperty("User-Agent",
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36");
-
-            int status = conn.getResponseCode();
-            log.debug("[SSL] {} {} → {}", method, url, status);
-
-            boolean isRedirect = (status == 301 || status == 302 ||
-                                  status == 303 || status == 307 || status == 308);
-            if (!isRedirect) return null;
-
-            String location = conn.getHeaderField("Location");
-            if (location == null || location.isBlank()) return null;
-
-            if (location.startsWith("//")) {
-                return "https:" + location;
-            } else if (location.startsWith("/")) {
-                URL base = new URL(url);
-                return base.getProtocol() + "://" + base.getHost()
-                        + (base.getPort() != -1 ? ":" + base.getPort() : "")
-                        + location;
-            } else if (!location.startsWith("http")) {
-                URL base = new URL(url);
-                return base.getProtocol() + "://" + base.getHost() + "/" + location;
-            }
-            return location;
+            return fetchLocationWithThrow(url, method);
         } catch (Exception e) {
             log.warn("[SSL] {} request failed for {}: {}", method, url, e.getMessage());
             return null;
         }
+    }
+
+    private String fetchLocationWithThrow(String url, String method) throws Exception {
+        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+        conn.setInstanceFollowRedirects(false);
+        conn.setConnectTimeout(TIMEOUT_MS);
+        conn.setReadTimeout(TIMEOUT_MS);
+        conn.setRequestMethod(method);
+        conn.setRequestProperty("User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/124.0 Safari/537.36");
+
+        int status = conn.getResponseCode();
+        log.debug("[SSL] {} {} → {}", method, url, status);
+
+        boolean isRedirect = (status == 301 || status == 302 ||
+                              status == 303 || status == 307 || status == 308);
+        if (!isRedirect) return null;
+
+        String location = conn.getHeaderField("Location");
+        if (location == null || location.isBlank()) return null;
+
+        if (location.startsWith("//")) {
+            return "https:" + location;
+        } else if (location.startsWith("/")) {
+            URL base = new URL(url);
+            return base.getProtocol() + "://" + base.getHost()
+                    + (base.getPort() != -1 ? ":" + base.getPort() : "")
+                    + location;
+        } else if (!location.startsWith("http")) {
+            URL base = new URL(url);
+            return base.getProtocol() + "://" + base.getHost() + "/" + location;
+        }
+        return location;
     }
 
     private String shortName(String dn) {
