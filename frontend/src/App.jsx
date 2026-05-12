@@ -17,6 +17,7 @@ export default function App() {
   const [copyCopied, setCopyCopied] = useState(false);
   const [displayRiskScore, setDisplayRiskScore] = useState(0);
   const [textRiskScore, setTextRiskScore] = useState(0);
+  const prevRiskScoreRef = useRef(null);
   const logsEndRef = useRef(null);
 
   // Keyboard shortcut for executing scan
@@ -317,23 +318,34 @@ export default function App() {
   // Animate risk score ring when result changes
   useEffect(() => {
     if (result) {
-      setDisplayRiskScore(0);
-      setTextRiskScore(0);
+      const target = result.riskScore;
+      const startScore = prevRiskScoreRef.current === null ? 0 : prevRiskScoreRef.current;
+      
+      // If first scan after refresh, start visually from 0
+      if (prevRiskScoreRef.current === null) {
+        setDisplayRiskScore(0);
+        setTextRiskScore(0);
+      }
+      
       const timer = setTimeout(() => {
-        setDisplayRiskScore(result.riskScore);
+        setDisplayRiskScore(target);
         
-        let current = 0;
-        const target = result.riskScore;
-        if (target === 0) return;
+        if (target === startScore) {
+          setTextRiskScore(target);
+          prevRiskScoreRef.current = target;
+          return;
+        }
         
+        let current = startScore;
         const duration = 1000; // Match CSS duration
         const intervalTime = 20;
         const steps = duration / intervalTime;
-        const stepValue = target / steps;
+        const stepValue = (target - startScore) / steps;
         
         const counter = setInterval(() => {
           current += stepValue;
-          if (current >= target) {
+          
+          if ((stepValue > 0 && current >= target) || (stepValue < 0 && current <= target)) {
             setTextRiskScore(target);
             clearInterval(counter);
           } else {
@@ -341,6 +353,7 @@ export default function App() {
           }
         }, intervalTime);
         
+        prevRiskScoreRef.current = target;
       }, 50);
       return () => clearTimeout(timer);
     }
@@ -594,14 +607,6 @@ export default function App() {
                         {textRiskScore}
                       </span>
                     </div>
-                  </div>
-
-                  {/* Horizontal color-coded risk bar */}
-                  <div className="w-full h-1.5 bg-white/5 rounded-full mb-6 relative overflow-hidden">
-                    <div 
-                      className={`absolute top-0 left-0 h-full w-full bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500 transition-all duration-1000 ease-out`}
-                      style={{ clipPath: `inset(0 ${100 - displayRiskScore}% 0 0)` }}
-                    ></div>
                   </div>
 
                   <div className={`w-full bg-black/40 rounded-lg p-4 flex items-center gap-4 border border-${result.theme.base}-500/20 relative z-10`}>
