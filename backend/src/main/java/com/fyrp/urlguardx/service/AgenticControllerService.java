@@ -6,8 +6,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.util.concurrent.CompletableFuture;
-
 @Service
 public class AgenticControllerService {
 
@@ -44,70 +42,77 @@ public class AgenticControllerService {
         log.info("[AGENT] Starting scan for {}", url);
 
         /*
-         STAGE 1 — CONCURRENT LEXICAL & BLACKLIST
+         STEP 1 — LEXICAL ALWAYS RUNS
          Normalize scheme to http:// before ML analysis so https://neverssl.com
          and http://neverssl.com produce identical model inputs and cache keys.
         */
         String lexicalUrl = url.replaceFirst("^https://", "http://");
-        
-        CompletableFuture<ModuleResult> lexicalFuture = CompletableFuture.supplyAsync(() -> {
-            try { return lexicalService.analyze(lexicalUrl); } 
-            catch (Exception e) { return ModuleResult.warning("ML analysis failed: " + e.getMessage(), 50.0); }
-        });
-        
-        CompletableFuture<ModuleResult> blacklistFuture = CompletableFuture.supplyAsync(() -> {
-            try { return blacklistService.check(url); } 
-            catch (Exception e) { return ModuleResult.warning("Threat check failed", 50.0); }
-        });
+        ModuleResult lexical = lexicalService.analyze(lexicalUrl);
 
-        ModuleResult blacklist;
-        try { blacklist = blacklistFuture.join(); } 
-        catch (Exception e) { blacklist = ModuleResult.warning("Threat intel offline", 50.0); }
+        /*
+         STEP 2 — BLACKLIST ALWAYS RUNS
+         (even if ML says danger)
+        */
+        ModuleResult blacklist = blacklistService.check(url);
 
+        /*
+         FAIL FAST ONLY FOR REAL BLACKLIST HIT
+         */
         if ("Danger".equalsIgnoreCase(blacklist.getStatus())) {
-            ModuleResult lexical;
-            try { lexical = lexicalFuture.join(); } 
-            catch (Exception e) { lexical = ModuleResult.warning("ML skipped/failed", 50.0); }
 
-            ModuleResult ssl = ModuleResult.skipped("Skipped after confirmed blacklist hit");
-            ModuleResult domain = ModuleResult.skipped("Skipped after confirmed blacklist hit");
+            ModuleResult ssl = ModuleResult.skipped(
+                    "Skipped after confirmed blacklist hit");
 
-            return buildResponse(url, lexical, domain, ssl, blacklist);
+            ModuleResult domain = ModuleResult.skipped(
+                    "Skipped after confirmed blacklist hit");
+
+            return buildResponse(
+                    url,
+                    lexical,
+                    domain,
+                    ssl,
+                    blacklist
+            );
         }
 
-        boolean goldenDomain = false;
-        try { goldenDomain = domainService.isGoldenDomain(url); } catch (Exception ignored) {}
-
-        CompletableFuture<ModuleResult> domainFuture = goldenDomain 
-                ? CompletableFuture.completedFuture(ModuleResult.clean("Golden domain detected — WHOIS skipped", 2.0))
-                : CompletableFuture.supplyAsync(() -> {
-                    try { return domainService.analyze(url); } 
-                    catch (Exception e) { return ModuleResult.warning("Domain analysis failed", 50.0); }
-                });
-
-        CompletableFuture<ModuleResult> sslFuture = CompletableFuture.supplyAsync(() -> {
-            try { return sslService.validate(url); } 
-            catch (Exception e) { return ModuleResult.warning("SSL validation failed", 50.0); }
-        });
-
-        ModuleResult lexical;
-        try { lexical = lexicalFuture.join(); } 
-        catch (Exception e) { lexical = ModuleResult.warning("ML analysis failed", 50.0); }
+        /*
+         STEP 3 — TRUSTED DOMAIN CHECK
+         */
+        boolean goldenDomain = domainService.isGoldenDomain(url);
 
         ModuleResult domain;
-        try { domain = domainFuture.join(); } 
-        catch (Exception e) { domain = ModuleResult.warning("Domain analysis failed", 50.0); }
-
         ModuleResult ssl;
-        try { ssl = sslFuture.join(); } 
-        catch (Exception e) { ssl = ModuleResult.warning("SSL validation failed", 50.0); }
 
-        try {
-            return buildResponse(url, lexical, domain, ssl, blacklist);
-        } catch (Exception e) {
-            log.error("Failed to build response", e);
-            throw new RuntimeException("Orchestration failed safely", e);
+        /*
+         Golden domain:
+         Skip WHOIS only
+         Still run SSL
+         */
+        if (goldenDomain) {
+            domain = ModuleResult.clean(
+                    "Golden domain detected — WHOIS skipped",
+                    2.0
+            );
+
+            ssl = sslService.validate(url);
         }
+
+
+        /*
+         Standard Full Scan
+         */
+        else {
+            domain = domainService.analyze(url);
+            ssl = sslService.validate(url);
+        }
+
+        return buildResponse(
+                url,
+                lexical,
+                domain,
+                ssl,
+                blacklist
+        );
     }
 
     private ScanResponse buildResponse(
