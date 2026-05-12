@@ -6,6 +6,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.concurrent.CompletableFuture;
+
 @Service
 public class AgenticControllerService {
 
@@ -42,23 +44,32 @@ public class AgenticControllerService {
         log.info("[AGENT] Starting scan for {}", url);
 
         /*
-         STEP 1 — LEXICAL ALWAYS RUNS
+         STAGE 1 — CONCURRENT LEXICAL & BLACKLIST
          Normalize scheme to http:// before ML analysis so https://neverssl.com
          and http://neverssl.com produce identical model inputs and cache keys.
         */
         String lexicalUrl = url.replaceFirst("^https://", "http://");
-        ModuleResult lexical = lexicalService.analyze(lexicalUrl);
+        
+        CompletableFuture<ModuleResult> lexicalFuture = CompletableFuture.supplyAsync(
+                () -> lexicalService.analyze(lexicalUrl)
+        );
+        
+        CompletableFuture<ModuleResult> blacklistFuture = CompletableFuture.supplyAsync(
+                () -> blacklistService.check(url)
+        );
 
         /*
-         STEP 2 — BLACKLIST ALWAYS RUNS
-         (even if ML says danger)
+         CHECKPOINT: Wait for Blacklist
         */
-        ModuleResult blacklist = blacklistService.check(url);
+        ModuleResult blacklist = blacklistFuture.join();
 
         /*
          FAIL FAST ONLY FOR REAL BLACKLIST HIT
          */
         if ("Danger".equalsIgnoreCase(blacklist.getStatus())) {
+
+            // Wait for ML to finish just for the report, but skip Domain & SSL
+            ModuleResult lexical = lexicalFuture.join();
 
             ModuleResult ssl = ModuleResult.skipped(
                     "Skipped after confirmed blacklist hit");
@@ -76,35 +87,22 @@ public class AgenticControllerService {
         }
 
         /*
-         STEP 3 — TRUSTED DOMAIN CHECK
+         STAGE 2 — CONCURRENT DOMAIN & SSL
          */
         boolean goldenDomain = domainService.isGoldenDomain(url);
 
-        ModuleResult domain;
-        ModuleResult ssl;
+        CompletableFuture<ModuleResult> domainFuture = goldenDomain 
+                ? CompletableFuture.completedFuture(ModuleResult.clean("Golden domain detected — WHOIS skipped", 2.0))
+                : CompletableFuture.supplyAsync(() -> domainService.analyze(url));
 
-        /*
-         Golden domain:
-         Skip WHOIS only
-         Still run SSL
-         */
-        if (goldenDomain) {
-            domain = ModuleResult.clean(
-                    "Golden domain detected — WHOIS skipped",
-                    2.0
-            );
+        CompletableFuture<ModuleResult> sslFuture = CompletableFuture.supplyAsync(
+                () -> sslService.validate(url)
+        );
 
-            ssl = sslService.validate(url);
-        }
-
-
-        /*
-         Standard Full Scan
-         */
-        else {
-            domain = domainService.analyze(url);
-            ssl = sslService.validate(url);
-        }
+        // Wait for remaining futures
+        ModuleResult lexical = lexicalFuture.join();
+        ModuleResult domain  = domainFuture.join();
+        ModuleResult ssl     = sslFuture.join();
 
         return buildResponse(
                 url,
