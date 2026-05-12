@@ -50,7 +50,7 @@ public class DomainAnalyzerService {
     // ─────────────────────────────────────────────────────────────────────
     //  Main entry point
     // ─────────────────────────────────────────────────────────────────────
-    @org.springframework.cache.annotation.Cacheable(value = "domainCache", key = "#rawUrl.replaceAll('^https?://(www\\\\.)?', '').split('/')[0]")
+    @org.springframework.cache.annotation.Cacheable(value = "domainCache", key = "#rawUrl")
     public ModuleResult analyze(String rawUrl) {
 
         String host = extractHost(rawUrl);
