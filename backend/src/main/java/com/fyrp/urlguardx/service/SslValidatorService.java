@@ -411,6 +411,18 @@ public class SslValidatorService {
 
     private String fetchLocationWithThrow(String url, String method) throws Exception {
         HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+        if (conn instanceof javax.net.ssl.HttpsURLConnection) {
+            javax.net.ssl.HttpsURLConnection httpsConn = (javax.net.ssl.HttpsURLConnection) conn;
+            SSLContext ctx = SSLContext.getInstance("TLS");
+            ctx.init(null, new TrustManager[]{ new X509TrustManager() {
+                public void checkClientTrusted(X509Certificate[] c, String a) {}
+                public void checkServerTrusted(X509Certificate[] c, String a) {}
+                public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+            }}, new java.security.SecureRandom());
+            httpsConn.setSSLSocketFactory(ctx.getSocketFactory());
+            httpsConn.setHostnameVerifier((hostname, session) -> true);
+        }
+
         conn.setInstanceFollowRedirects(false);
         conn.setConnectTimeout(TIMEOUT_MS);
         conn.setReadTimeout(TIMEOUT_MS);
