@@ -71,10 +71,7 @@ public class GeminiExplanationService {
 
             @SuppressWarnings("unchecked")
             Map<String, Object> response = webClient.post()
-                    .uri(uriBuilder -> uriBuilder
-                            .path(geminiApiUrl.replace("https://generativelanguage.googleapis.com", ""))
-                            .queryParam("key", geminiApiKey)
-                            .build())
+                    .uri(java.net.URI.create(apiUrl))
                     .contentType(MediaType.APPLICATION_JSON)
                     .accept(MediaType.APPLICATION_JSON)
                     .bodyValue(requestBody)
